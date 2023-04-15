@@ -38,7 +38,8 @@ xdim = 17; %pixels x
 brainSize = 4;
 encodingDirection = 'x'; %phase encoding direction
 modulation = 'sine'; % 'sine', 'heartbeat'
-offsetVoxels = 0; %1 to add a random offset to voxel phase in 'sine' condition
+offsetIndividualVoxels = 0; %1 to add a random offset to voxel phase in 'sine' condition
+phaseShiftBetweenLines = 1; % will randomize the phase between lines instead of making continuous 
 noiseLevel = 0; %std of gaussian noise added to OG image
 ntimePointsMs = 1000; %length of simulation
 hz = 4; %signal frequency in "brain" voxels
@@ -55,7 +56,7 @@ ydim = xdim; %pixels y
 %% make an image with modulatory signals %%
 switch modulation
     case 'sine'
-        originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetVoxels);
+        originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetIndividualVoxels,phaseShiftBetweenLines);
     case 'heartbeat'
         originalImage = makeOriginalImageHeartbeat(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz);
 end
@@ -146,13 +147,18 @@ niftiImage = reshape(abs(shiftRecoveredImage),[sz(1) sz(2) 1 sz(3)]);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%
-%% makeOriginalImage %%
+%% makeOriginalImageSine %%
 %%%%%%%%%%%%%%%%%%%%%%%
-function originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetVoxels);
+function originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetVoxels,phaseShiftBetweenLines);
 
 %make the image with a "brain" which will have signals in it
 for lineSample = 1:xdim
     originalImage{lineSample} = normrnd(0,noiseLevel,xdim,ydim,ntimePointsMs);
+end
+
+%calculate line offsets if randomizing
+if phaseShiftBetweenLines; 
+    lineOffsetMs = round(rand(1,xdim)*ntimePointsMs);
 end
 
 %put a signal of determined frequency but random phase in the "brain" voxels
@@ -168,12 +174,17 @@ for voxelx = 1:xdim;
             else
                 voxelOffset = 0;
             end
-            
-            %make the lines
-            parfor lineSample = 1:xdim
-                originalImage{lineSample}(voxelx,voxely,:) = brainBaseContrast + amplitude*cos( ((1+(lineSample-1)*ntimePointsMs):(lineSample*ntimePointsMs))*2*pi/1000*hz+voxelOffset);
-            end
 
+            %make the lines
+            if ~phaseShiftBetweenLines
+                parfor lineSample = 1:xdim
+                    originalImage{lineSample}(voxelx,voxely,:) = brainBaseContrast + amplitude*cos( ((1+(lineSample-1)*ntimePointsMs):(lineSample*ntimePointsMs))*2*pi/1000*hz+voxelOffset);
+                end    
+            else
+                parfor lineSample = 1:xdim
+                    originalImage{lineSample}(voxelx,voxely,:) = brainBaseContrast + amplitude*cos( ((1+lineOffsetMs(lineSample)):(lineOffsetMs(lineSample))+ntimePointsMs)*2*pi/1000*hz+voxelOffset);
+                end
+            end
         end
     end
 end
@@ -312,26 +323,77 @@ for row = 1:(floor(xdim/2)+1)
     singleLineXYFt = fft(singleLineXYT,[],3);
 
     %take the absolute value to throw out temporal phase information
+    DCmatrix = singleLineXYFt(:,:,1);
     absSingleLineXYFt = abs(singleLineXYFt);
-    
+    absSingleLineXYFt(:,:,1) = DCmatrix;
+
     %go back to XYT with temporal phase thrown out
     nophaseSingleLineXYT = ifft(absSingleLineXYFt,[],3);
-    
+            
+    %flip the negative components
+    for r = 1:xdim
+        for column = 1:xdim
+            pixelFtseries = nophaseSingleLineXYT(r,column,:);
+            if mean(pixelFtseries) < 0
+                pixelFtseries(:) = -pixelFtseries(:) + 2 * mean(pixelFtseries);
+                nophaseSingleLineXYT(r,column,:) = pixelFtseries(:);
+            end
+        end
+    end
+
     %go back to FxFyT now that you've removed temporal phase
     for sample = 1:numKsamples,
         nophaseSingleLineFxFyT(:,:,sample) = fftshift(fft2(nophaseSingleLineXYT(:,:,sample)));
     end
     
     for sample = 1:numKsamples
-        realignedKsp(:,:,sample) = realignedKsp(:,:,sample) + nophaseSingleLineFxFyT(:,:,sample);
-
-        %realignedKsp(row,:,sample) = nophaseSingleLineFxFyT(row,:,sample);
-        %realignedKsp(xdim-row+1,:,sample) = nophaseSingleLineFxFyT(xdim-row+1,:,sample);
+        %realignedKsp(:,:,sample) = realignedKsp(:,:,sample) + nophaseSingleLineFxFyT(:,:,sample);
+        realignedKsp(row,:,sample) = nophaseSingleLineFxFyT(row,:,sample);
+        realignedKsp(xdim-row+1,:,sample) = nophaseSingleLineFxFyT(xdim-row+1,:,sample);
 
     end
-    keyboard
-%keyboard
+  keyboard
 end
+
+
+
+fig = mlrSmartfig('line image')
+subplot(1,4,1)
+imagesc(abs(singleLineFxFyT(:,:,1))),colorbar,colormap(gray)
+xlabel('Fx'),ylabel('Fy'),title('Frequency image (1 timepoint)')
+subplot(1,4,2), hold on,
+for x = 1:xdim
+plot(1:200,reshape(singleLineFxFyT(row,x,:),1,200))
+end
+xlabel('time'),ylabel('magnitude of component'),title('Frequency component magnitudes over time (1 row')
+
+subplot(1,4,3);
+imagesc(singleLineXYT(:,:,1));colorbar,colormap(gray)
+xlabel('x'),ylabel('y'),title('image created from single lines')
+
+subplot(1,4,4), hold on
+for x = 1:xdim
+plot(1:200,reshape(singleLineXYT(x,8,:),1,200))
+end
+xlabel('time'),ylabel('magnitude'),title('pixel values over time (1 column)')
+
+
+
+
+figure
+subplot(1,2,1);
+imagesc(nophaseSingleLineXYT(:,:,1));colorbar,colormap(gray)
+xlabel('x'),ylabel('y'),title('image')
+
+subplot(1,2,2), hold on
+for x = 1:xdim
+plot(1:200,reshape(nophaseSingleLineXYT(x,8,:),1,200))
+end
+xlabel('time'),ylabel('magnitude')
+
+
+
+
 
 
 
