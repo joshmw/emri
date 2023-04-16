@@ -143,9 +143,6 @@ niftiImage = reshape(abs(shiftRecoveredImage),[sz(1) sz(2) 1 sz(3)]);
 
 
 
-
-
-
 %%%%%%%%%%%%%%%%%%%%%%%
 %% makeOriginalImageSine %%
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -331,15 +328,15 @@ for row = 1:(floor(xdim/2)+1)
     nophaseSingleLineXYT = ifft(absSingleLineXYFt,[],3);
             
     %flip the negative components
-    for r = 1:xdim
-        for column = 1:xdim
-            pixelFtseries = nophaseSingleLineXYT(r,column,:);
-            if mean(pixelFtseries) < 0
-                pixelFtseries(:) = -pixelFtseries(:) + 2 * mean(pixelFtseries);
-                nophaseSingleLineXYT(r,column,:) = pixelFtseries(:);
-            end
-        end
-    end
+     for r = 1:xdim
+         for column = 1:xdim
+             pixelFtseries = nophaseSingleLineXYT(r,column,:);
+             if mean(pixelFtseries) < 0
+                 pixelFtseries(:) = -pixelFtseries(:) + 2 * mean(pixelFtseries);
+                 nophaseSingleLineXYT(r,column,:) = pixelFtseries(:);
+             end
+         end
+     end
 
     %go back to FxFyT now that you've removed temporal phase
     for sample = 1:numKsamples,
@@ -347,52 +344,53 @@ for row = 1:(floor(xdim/2)+1)
     end
     
     for sample = 1:numKsamples
-        %realignedKsp(:,:,sample) = realignedKsp(:,:,sample) + nophaseSingleLineFxFyT(:,:,sample);
-        realignedKsp(row,:,sample) = nophaseSingleLineFxFyT(row,:,sample);
-        realignedKsp(xdim-row+1,:,sample) = nophaseSingleLineFxFyT(xdim-row+1,:,sample);
+        realignedKsp(:,:,sample) = realignedKsp(:,:,sample) + nophaseSingleLineFxFyT(:,:,sample);
+        %realignedKsp(row,:,sample) = nophaseSingleLineFxFyT(row,:,sample);
+        %realignedKsp(xdim-row+1,:,sample) = nophaseSingleLineFxFyT(xdim-row+1,:,sample);
 
     end
-  keyboard
+  
 end
 
 
-
-fig = mlrSmartfig('line image')
-subplot(1,4,1)
-imagesc(abs(singleLineFxFyT(:,:,1))),colorbar,colormap(gray)
-xlabel('Fx'),ylabel('Fy'),title('Frequency image (1 timepoint)')
-subplot(1,4,2), hold on,
-for x = 1:xdim
-plot(1:200,reshape(singleLineFxFyT(row,x,:),1,200))
-end
-xlabel('time'),ylabel('magnitude of component'),title('Frequency component magnitudes over time (1 row')
-
-subplot(1,4,3);
-imagesc(singleLineXYT(:,:,1));colorbar,colormap(gray)
-xlabel('x'),ylabel('y'),title('image created from single lines')
-
-subplot(1,4,4), hold on
-for x = 1:xdim
-plot(1:200,reshape(singleLineXYT(x,8,:),1,200))
-end
-xlabel('time'),ylabel('magnitude'),title('pixel values over time (1 column)')
-
-
-
-
-figure
-subplot(1,2,1);
-imagesc(nophaseSingleLineXYT(:,:,1));colorbar,colormap(gray)
-xlabel('x'),ylabel('y'),title('image')
-
-subplot(1,2,2), hold on
-for x = 1:xdim
-plot(1:200,reshape(nophaseSingleLineXYT(x,8,:),1,200))
-end
-xlabel('time'),ylabel('magnitude')
-
-
-
+% fig = mlrSmartfig('line image')
+% subplot(2,4,1)
+% imagesc(abs(singleLineFxFyT(:,:,1))),colorbar,colormap(gray)
+% xlabel('Fx'),ylabel('Fy'),title('OG Frequency image (1 timepoint)')
+% subplot(4,4,2), hold on,
+% for x = 1:xdim
+% plot(1:200,reshape(real(singleLineFxFyT(row,x,:)),1,200))
+% end
+% xlabel('time'),ylabel('magnitude of component'),title('Real Value Frequency component magnitudes over time (1 row)')
+% subplot(4,4,6), hold on,
+% for x = 1:xdim
+% plot(1:200,reshape(imag(singleLineFxFyT(row,x,:)),1,200))
+% end
+% xlabel('time'),ylabel('magnitude of component'),title('Imaginary Value Frequency component magnitudes over time (1 row)')
+% 
+% subplot(2,4,3);
+% imagesc(singleLineXYT(:,:,1));colorbar,colormap(gray)
+% xlabel('x'),ylabel('y'),title('image created from single lines')
+% 
+% subplot(2,4,4), hold on
+% for x = 1:xdim
+% plot(1:200,reshape(singleLineXYT(x,8,:),1,200))
+% end
+% xlabel('time'),ylabel('magnitude'),title('pixel values over time (1 column)')
+% 
+% 
+% subplot(2,4,5);
+% imagesc(nophaseSingleLineXYT(:,:,1));colorbar,colormap(gray)
+% xlabel('x'),ylabel('y'),title('Realigned image')
+% 
+% subplot(2,4,6), hold on
+% for x = 1:xdim
+% plot(1:200,reshape(nophaseSingleLineXYT(x,8,:),1,200))
+% end
+% xlabel('time'),ylabel('magnitude')
+% 
+% figure,imagesc(abs(realignedKsp(:,:,1)))
+% 
 
 
 
@@ -433,11 +431,23 @@ switch encodingDirection
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% OLD STUFF, keeping just in case %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
 
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % %% doCorrectedPhaseRecon %%
