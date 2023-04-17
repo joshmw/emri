@@ -39,7 +39,7 @@ brainSize = 4;
 encodingDirection = 'x'; %phase encoding direction
 modulation = 'sine'; % 'sine', 'heartbeat'
 offsetIndividualVoxels = 0; %1 to add a random offset to voxel phase in 'sine' condition
-phaseShiftBetweenLines = 0; % will randomize the phase between lines instead of making continuous 
+phaseShiftBetweenLines = 1; % will randomize the phase between lines instead of making continuous 
 noiseLevel = 0; %std of gaussian noise added to OG image
 ntimePointsMs = 1000; %length of simulation
 hz = 4; %signal frequency in "brain" voxels
@@ -80,7 +80,7 @@ timePoint = round(rand*ntimePointsMs/sampleTimeMs)
 
 figure;
 subplot(2,4,1); imshow(trueImage(:,:,timePoint)); title('ground truth image'); xlabel('x (image)'); ylabel('y (image)')
-subplot(2,4,5); imshow(abs(fft2(trueImage(:,:,timePoint)))); title('ground truth kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
+subplot(2,4,5); imshow(abs(fftshift(fft2(trueImage(:,:,timePoint))))); title('ground truth kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
 
 subplot(2,4,2); imshow(ifft2(ifftshift(ksp(:,:,timePoint)))); title('stationary sampled image'); xlabel('x (image)'); ylabel('y (image)')
 subplot(2,4,6); imshow(abs(ksp(:,:,timePoint))); title('stationary sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
@@ -93,46 +93,34 @@ end
 subplot(2,4,7); imshow(abs(phaseUnlockedKsp(:,:,timePoint))); title('phase-shifted sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
 
 subplot(2,4,4); imshow(ifft2(ifftshift(realignedKsp(:,:,timePoint)))); title('phase-realigned sampled image'); xlabel('x (image)'); ylabel('y (image)')
-subplot(2,4,8); imshow(abs(realignedKsp(:,:,timePoint))); title('phase-realigned sampled kspace - DOESNT WORK RIGHT NOW'); xlabel('x (frequency)'); ylabel('y (frequency)')
+subplot(2,4,8); imshow(abs(realignedKsp(:,:,timePoint))); title('phase-realigned sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
 
 % reconstruct the images from k space
-recoveredImage = [];
-for i = 1:numKsamples,
-    recoveredImage(:,:,i) = ifft2(ifftshift(ksp(:,:,i)));
-end
+recoveredImage = []; shiftRecoveredImage = []; realignedRecoveredImage = [];
+for i = 1:numKsamples, recoveredImage(:,:,i) = ifft2(ifftshift(ksp(:,:,i))); end
+for i = 1:numKsamples, shiftRecoveredImage(:,:,i) = ifft2(ifftshift(phaseUnlockedKsp(:,:,i))); end
+for i = 1:numKsamples, realignedRecoveredImage(:,:,i) = ifft2(ifftshift(realignedKsp(:,:,i))); end
 
-shiftRecoveredImage = [];
-for i = 1:numKsamples,
-    shiftRecoveredImage(:,:,i) = ifft2(ifftshift(phaseUnlockedKsp(:,:,i)));
-end
+%plot example voxel time series
+figure, sgtitle('Example Voxel Time Series')
+subplot(1,3,1), title('Example brain voxel time series'), xlabel('Time'), ylabel('Magnitude'), hold on, voxel = round(xdim/2);
+plot(squeeze(recoveredImage(voxel,voxel,:)))
+plot(squeeze(shiftRecoveredImage(voxel,voxel,:)))
+plot(squeeze(realignedRecoveredImage(voxel,voxel,:)))
+legend('Resampled line (ground truth)','Different line samples','Phase-realigned, different line samples')
 
-realignedRecoveredImage = [];
-for i = 1:numKsamples,
-    realignedRecoveredImage(:,:,i) = ifft2(ifftshift(realignedKsp(:,:,i)));
-end
+subplot(1,3,2), hold on, title('Non-brain voxel timeseries (shifted lines)')
+plotNonBrainVoxels(xdim,ydim,numKsamples,shiftRecoveredImage,brainSize,encodingDirection);
 
-% plot example voxels: an original image one, a phase-alligned recon one,
-% a phase-shifted recon one, and a "false positive" from the phase shifted recon
-h = trueImage(round(xdim/2),round(ydim/2),:);
-j = recoveredImage(round(xdim/2),round(ydim/2),:);
-k = shiftRecoveredImage(round(xdim/2),round(ydim/2),:);
+subplot(1,3,3), hold on, title('Non-brain voxel timeseries (realigned from shifted lines)')
+plotNonBrainVoxels(xdim,ydim,numKsamples,realignedRecoveredImage,brainSize,encodingDirection);
 
-figure,title('Example voxels')
-subplot(2,2,1);plot(1:sampleTimeMs:ntimePointsMs,h(:)); title('Ground truth'); xlabel('time (ms)'); ylabel('signal (a.u.)');
-subplot(2,2,2);plot(1:sampleTimeMs:ntimePointsMs,j(:)); title('Phase-locked measurement recon'); xlabel('time (ms)'); ylabel('signal (a.u.)');
-subplot(2,2,3);plot(1:sampleTimeMs:ntimePointsMs,k(:)); title('Phase-scrambled measurement recon'); xlabel('time (ms)'); ylabel('signal (a.u.)');
-subplot(2,2,4);hold on; plotNonBrainVoxels(xdim,ydim,numKsamples,shiftRecoveredImage,brainSize,encodingDirection);
-title('All non-brain voxels, phase-scrambled recon'); xlabel('time (ms)'); ylabel('signal (a.u.)');
 
-sgtitle('Example voxels')
+%%%%%% END OF SIMULATION %%%%%%%%
 keyboard
-
-%%%% END OF SIMULATION %%%%
-
 
 sz = size(shiftRecoveredImage);
 niftiImage = reshape(abs(shiftRecoveredImage),[sz(1) sz(2) 1 sz(3)]);
-
 
 
 
@@ -231,7 +219,7 @@ ksp = zeros(xdim,ydim,numKsamples);
 for row = 1:xdim
     %for each TR, sample the line in kspace and add to the kspace image
     for sample = 1:numKsamples  
-        imageKsp = fftshift(fft2(originalImage{1}(:,:,sampleTimeMs*(1+(sample-1)))));      
+        imageKsp = fftshift(fft2(originalImage{1}(:,:,1+sampleTimeMs*(sample-1))));      
         switch encodingDirection
             case 'x'
                 kspLine = imageKsp(row,:);
@@ -259,7 +247,7 @@ if buildConjugateLines
     for row = 1:(floor(xdim/2)+1)
         for sample = 1:numKsamples
             %takes the temporal order of the images
-            imageKsp = fftshift(fft2(originalImage{row}(:,:,sampleTimeMs*(1+(sample-1)))));      
+            imageKsp = fftshift(fft2(originalImage{row}(:,:,1+sampleTimeMs*(sample-1))));      
             switch encodingDirection
                 case 'x'
                     kspLine = imageKsp(row,:);
@@ -280,7 +268,7 @@ else
     for row = 1:(xdim)
         for sample = 1:numKsamples
             %takes the temporal order of the images
-            imageKsp = fftshift(fft2(originalImage{row}(:,:,sampleTimeMs*(1+(sample-1)))));      
+            imageKsp = fftshift(fft2(originalImage{row}(:,:,1+sampleTimeMs*(sample-1))));      
             switch encodingDirection
                 case 'x'
                     kspLine = imageKsp(row,:);
@@ -427,7 +415,7 @@ xlabel('time'),ylabel('magnitude')
 %%%%%%%%%%%%%%%%%%%%%%%%
 %% plotNonBrainVoxels %%
 %%%%%%%%%%%%%%%%%%%%%%%%
-function plotNonBrainVoxels(xdim,ydim,numKsamples,shiftRecoveredImage,brainSize,encodingDirection)
+function plotNonBrainVoxels(xdim,ydim,numKsamples,data,brainSize,encodingDirection)
 
 brain = (round(xdim/2)-brainSize/2):(round(xdim/2)+brainSize/2);
 
@@ -437,7 +425,7 @@ switch encodingDirection
         for x = 1:xdim;
             for y = 1:ydim;
                 if (~ismember(x,brain) & ismember(y,brain));
-                    plot(1:numKsamples,reshape(shiftRecoveredImage(x,y,:),1,numKsamples))
+                    plot(1:numKsamples,reshape(data(x,y,:),1,numKsamples))
                 end
             end
         end
@@ -447,7 +435,7 @@ switch encodingDirection
         for x = 1:xdim;
             for y = 1:ydim;
                 if (ismember(x,brain) & ~ismember(y,brain));
-                    plot(1:numKsamples,reshape(shiftRecoveredImage(x,y,:),1,numKsamples))
+                    plot(1:numKsamples,reshape(data(x,y,:),1,numKsamples))
                 end
             end
         end
