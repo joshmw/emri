@@ -33,11 +33,10 @@
 
 function emriSimul(varargin)
 
-%% set parameters %%
+%% SET PARAMETERS %%
 xdim = 17; %pixels x
 brainSize = 4;
 encodingDirection = 'x'; %phase encoding direction
-modulation = 'sine'; % 'sine', 'heartbeat'
 offsetIndividualVoxels = 0; %1 to add a random offset to voxel phase in 'sine' condition
 phaseShiftBetweenLines = 1; % will randomize the phase between lines instead of making continuous 
 noiseLevel = 0; %std of gaussian noise added to OG image
@@ -45,23 +44,20 @@ ntimePointsMs = 1000; %length of simulation
 hz = 4; %signal frequency in "brain" voxels
 amplitude = 1;
 sampleTimeMs = 5; %TR length
-brainBaseContrast = 5;
-numKsamples = ntimePointsMs/sampleTimeMs; %number of samples will be total length/TR length
-buildConjugateLines = 1;
+brainBaseContrast = 2;
+
+    %don't change these, probably...
+    buildConjugateLines = 1;
+    numKsamples = ntimePointsMs/sampleTimeMs; %number of samples will be total length/TR length
+    ydim = xdim; %pixels y
+    getArgs(varargin);
 
 
-getArgs(varargin);
-ydim = xdim; %pixels y
+%% MAKE THE ORIGINAL IMAGE %%
+originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetIndividualVoxels,phaseShiftBetweenLines);
 
-%% make an image with modulatory signals %%
-switch modulation
-    case 'sine'
-        originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetIndividualVoxels,phaseShiftBetweenLines);
-    case 'heartbeat'
-        originalImage = makeOriginalImageHeartbeat(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz);
-end
 
-%% get the different reconstructions
+%% GET THE DIFFERENT RECONSTRUCTINONS %%
 %phase locked recon using only the first line sample of K space
 ksp = doPhaseLockedRecon(xdim,ydim,numKsamples,originalImage,sampleTimeMs,encodingDirection);
 
@@ -69,31 +65,12 @@ ksp = doPhaseLockedRecon(xdim,ydim,numKsamples,originalImage,sampleTimeMs,encodi
 phaseUnlockedKsp = doPhaseUnlockedRecon(xdim,ydim,numKsamples,originalImage,sampleTimeMs,encodingDirection,buildConjugateLines);
 
 % try and align temporally...
-realignedKsp = correctPhaseUnlockedKsp(phaseUnlockedKsp,xdim,numKsamples);
+realignedKsp = correctPhaseUnlockedKsp(phaseUnlockedKsp,xdim,numKsamples,encodingDirection);
 
-%% plot things %%
+
+%% PLOT THE RESULTS %%
 % get the true image sampled at the same frequency as kspace
 trueImage = originalImage{1}(:,:,1:sampleTimeMs:ntimePointsMs);
-
-%pick a time point to compare
-timePoint = round(rand*ntimePointsMs/sampleTimeMs)
-
-figure;
-subplot(2,4,1); imshow(trueImage(:,:,timePoint)); title('ground truth image'); xlabel('x (image)'); ylabel('y (image)')
-subplot(2,4,5); imshow(abs(fftshift(fft2(trueImage(:,:,timePoint))))); title('ground truth kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
-
-subplot(2,4,2); imshow(ifft2(ifftshift(ksp(:,:,timePoint)))); title('stationary sampled image'); xlabel('x (image)'); ylabel('y (image)')
-subplot(2,4,6); imshow(abs(ksp(:,:,timePoint))); title('stationary sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
-
-if ~buildConjugateLines
-subplot(2,4,3); imshow(abs(ifft2(ifftshift(phaseUnlockedKsp(:,:,timePoint))))); title('phase-shifted sampled image'); xlabel('x (image)'); ylabel('y (image)')
-else
-subplot(2,4,3); imshow(ifft2(ifftshift(phaseUnlockedKsp(:,:,timePoint)))); title('phase-shifted sampled image'); xlabel('x (image)'); ylabel('y (image)'),
-end
-subplot(2,4,7); imshow(abs(phaseUnlockedKsp(:,:,timePoint))); title('phase-shifted sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
-
-subplot(2,4,4); imshow(ifft2(ifftshift(realignedKsp(:,:,timePoint)))); title('phase-realigned sampled image'); xlabel('x (image)'); ylabel('y (image)')
-subplot(2,4,8); imshow(abs(realignedKsp(:,:,timePoint))); title('phase-realigned sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
 
 % reconstruct the images from k space
 recoveredImage = []; shiftRecoveredImage = []; realignedRecoveredImage = [];
@@ -101,26 +78,44 @@ for i = 1:numKsamples, recoveredImage(:,:,i) = ifft2(ifftshift(ksp(:,:,i))); end
 for i = 1:numKsamples, shiftRecoveredImage(:,:,i) = ifft2(ifftshift(phaseUnlockedKsp(:,:,i))); end
 for i = 1:numKsamples, realignedRecoveredImage(:,:,i) = ifft2(ifftshift(realignedKsp(:,:,i))); end
 
-%plot example voxel time series
-figure, sgtitle('Example Voxel Time Series')
-subplot(1,3,1), title('Example brain voxel time series'), xlabel('Time'), ylabel('Magnitude'), hold on, voxel = round(xdim/2);
+%pick a time point to compare
+timePoint = round(rand*ntimePointsMs/sampleTimeMs)
+
+figure; sgtitle('Example images and voxel time series')
+%subplot(3,4,1); imagesc(trueImage(:,:,timePoint)); title('ground truth image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar
+%subplot(3,4,5); imagesc(abs(fftshift(fft2(trueImage(:,:,timePoint))))); title('ground truth kspace'); xlabel('x (frequency)'); ylabel('y (frequency)') 
+
+subplot(3,3,1); imagesc(ifft2(ifftshift(ksp(:,:,timePoint)))); title('stationary sampled image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar
+subplot(3,3,4); imagesc(abs(ksp(:,:,timePoint))); title('stationary sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
+
+if ~buildConjugateLines
+subplot(3,3,2); imagesc(abs(ifft2(ifftshift(phaseUnlockedKsp(:,:,timePoint))))); title('phase-shifted sampled image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar
+else
+subplot(3,3,2); imagesc(ifft2(ifftshift(phaseUnlockedKsp(:,:,timePoint)))); title('phase-shifted sampled image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar
+end
+subplot(3,3,5); imagesc(abs(phaseUnlockedKsp(:,:,timePoint))); title('phase-shifted sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
+
+subplot(3,3,3); imagesc(ifft2(ifftshift(realignedKsp(:,:,timePoint)))); title('phase-realigned sampled image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar
+subplot(3,3,6); imagesc(abs(realignedKsp(:,:,timePoint))); title('phase-realigned sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)')
+
+subplot(3,3,7), title('Example brain voxel time series'), xlabel('Time'), ylabel('Magnitude'), hold on, voxel = round(xdim/2);
 plot(squeeze(recoveredImage(voxel,voxel,:)))
 plot(squeeze(shiftRecoveredImage(voxel,voxel,:)))
 plot(squeeze(realignedRecoveredImage(voxel,voxel,:)))
 legend('Resampled line (ground truth)','Different line samples','Phase-realigned, different line samples')
 
-subplot(1,3,2), hold on, title('Non-brain voxel timeseries (shifted lines)')
+subplot(3,3,8), hold on, title('Non-brain voxel timeseries (shifted lines)'), xlabel('Time'), ylabel('Magnitude'),
 plotNonBrainVoxels(xdim,ydim,numKsamples,shiftRecoveredImage,brainSize,encodingDirection);
 
-subplot(1,3,3), hold on, title('Non-brain voxel timeseries (realigned from shifted lines)')
+subplot(3,3,9), hold on, title('Non-brain voxel timeseries (realigned from shifted lines)'), xlabel('Time'), ylabel('Magnitude'),
 plotNonBrainVoxels(xdim,ydim,numKsamples,realignedRecoveredImage,brainSize,encodingDirection);
 
 
 %%%%%% END OF SIMULATION %%%%%%%%
 keyboard
 
-sz = size(shiftRecoveredImage);
-niftiImage = reshape(abs(shiftRecoveredImage),[sz(1) sz(2) 1 sz(3)]);
+% sz = size(shiftRecoveredImage);
+% niftiImage = reshape(abs(shiftRecoveredImage),[sz(1) sz(2) 1 sz(3)]);
 
 
 
@@ -130,6 +125,9 @@ niftiImage = reshape(abs(shiftRecoveredImage),[sz(1) sz(2) 1 sz(3)]);
 
 
 
+
+
+%% HELPER FUNCTIONS %%
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %% makeOriginalImageSine %%
@@ -170,36 +168,6 @@ for voxelx = 1:xdim;
                     originalImage{lineSample}(voxelx,voxely,:) = brainBaseContrast + amplitude*cos( ((1+lineOffsetMs(lineSample)):(lineOffsetMs(lineSample))+ntimePointsMs)*2*pi/1000*hz+voxelOffset);
                 end
             end
-        end
-    end
-end
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%
-%% makeOriginalImageHeartbeat %%
-%%%%%%%%%%%%%%%%%%%%%%%
-function originalImage = makeOriginalImageHeartbeat(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz);
-
-%make the image with a "brain" which will have signals in it
-for lineSample = 1:xdim
-    originalImage{lineSample} = normrnd(0,noiseLevel,xdim,ydim,ntimePointsMs);
-end
-
-%put a signal of determined frequency but random phase in the "brain" voxels
-brain = (round(xdim/2)-brainSize/2):(round(xdim/2)+brainSize/2); %brain is square here, and xdim=ydim
-
-for voxelx = 1:xdim;
-    for voxely = 1:ydim;
-        if ismember(voxelx,brain) & ismember(voxely,brain)
-            
-
-            voxelOffset = round(rand*ntimePointsMs); %makes the voxels different phase from eachother
-            %voxelOffset = 0;
-            parfor lineSample = 1:xdim
-                originalImage{lineSample}(voxelx,voxely,:) = brainBaseContrast + normpdf(1:ntimePointsMs,300+round(rand*50),40)*8*(rand/2+1);
-            end
-
         end
     end
 end
@@ -288,7 +256,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% correctPhaseUnlockedKsp %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function realignedKsp = correctPhaseUnlockedKsp(phaseUnlockedKsp,xdim,numKsamples)
+function realignedKsp = correctPhaseUnlockedKsp(phaseUnlockedKsp,xdim,numKsamples,encodingDirection)
 
 realignedKsp = zeros(size(phaseUnlockedKsp));
 
@@ -296,8 +264,14 @@ for row = 1:(floor(xdim/2)+1)
 
     %take a single pair of FxFyT lines
     singleLineFxFyT = zeros(size(phaseUnlockedKsp));
-    singleLineFxFyT(row,:,:) = phaseUnlockedKsp(row,:,:);
-    singleLineFxFyT(xdim-row+1,:,:) = phaseUnlockedKsp(xdim-row+1,:,:);
+    switch encodingDirection
+        case 'x'
+            singleLineFxFyT(row,:,:) = phaseUnlockedKsp(row,:,:);
+            singleLineFxFyT(xdim-row+1,:,:) = phaseUnlockedKsp(xdim-row+1,:,:);
+        case 'y'
+            singleLineFxFyT(:,row,:) = phaseUnlockedKsp(:,row,:);
+            singleLineFxFyT(:,xdim-row+1,:) = phaseUnlockedKsp(:,xdim-row+1,:);
+    end
 
     %recon an XYT image from the single line FxFyT matrix
     for sample = 1:numKsamples,
@@ -307,8 +281,7 @@ for row = 1:(floor(xdim/2)+1)
     %take the fourier transform in the time dimension
     singleLineXYFt = fft(singleLineXYT,[],3);
 
-    %take the absolute value to throw out temporal phase information, then
-    %flip back to original sign w/ DC matrix
+    %take the absolute value to throw out temporal phase information, then flip back to original sign w/ DC matrix
     DCmatrix = (singleLineXYFt(:,:,1)>0)*2-1;
     absSingleLineXYFt = abs(singleLineXYFt);
     absSingleLineXYFtDC = absSingleLineXYFt .* DCmatrix;
@@ -335,12 +308,11 @@ end
 
 
 
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%
 %% plotPhaseAlignment %%
 %%%%%%%%%%%%%%%%%%%%%%%%
+%this only works for 'x' phase encoding direction - could make it work
+%otherwise, but I am lazy. will add later.
 function plotPhaseAlignment(row,xdim,singleLineFxFyT,singleLineXYT,nophaseSingleLineFxFyT,nophaseSingleLineXYT)
 
 fig = mlrSmartfig('line image')
@@ -401,14 +373,6 @@ for x = 1:xdim
 plot(1:200,reshape(nophaseSingleLineXYT(x,8,:),1,200))
 end
 xlabel('time'),ylabel('magnitude')
-
-
-
-
-
-
-
-
 
 
 
@@ -525,6 +489,36 @@ switch encodingDirection
 % end
 % 
 % realignedLine = nophaseSingleLineFxFyT(row,:,:);
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% makeOriginalImageHeartbeat %%
+%%%%%%%%%%%%%%%%%%%%%%%
+% function originalImage = makeOriginalImageHeartbeat(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz);
+% 
+% %make the image with a "brain" which will have signals in it
+% for lineSample = 1:xdim
+%     originalImage{lineSample} = normrnd(0,noiseLevel,xdim,ydim,ntimePointsMs);
+% end
+% 
+% %put a signal of determined frequency but random phase in the "brain" voxels
+% brain = (round(xdim/2)-brainSize/2):(round(xdim/2)+brainSize/2); %brain is square here, and xdim=ydim
+% 
+% for voxelx = 1:xdim;
+%     for voxely = 1:ydim;
+%         if ismember(voxelx,brain) & ismember(voxely,brain)
+%             voxelOffset = round(rand*ntimePointsMs); %makes the voxels different phase from eachother
+%             %voxelOffset = 0;
+%             parfor lineSample = 1:xdim
+%                 originalImage{lineSample}(voxelx,voxely,:) = brainBaseContrast + normpdf(1:ntimePointsMs,300+round(rand*50),40)*8*(rand/2+1);
+%             end
+% 
+%         end
+%     end
+% end
+
 
 
 
