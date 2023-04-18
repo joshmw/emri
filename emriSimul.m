@@ -44,7 +44,7 @@ ntimePointsMs = 1000; %length of simulation
 hz = 4; %signal frequency in "brain" voxels
 amplitude = 1;
 sampleTimeMs = 5; %TR length
-brainBaseContrast = 2;
+brainBaseContrast = 1000;
 
     %don't change these, probably...
     buildConjugateLines = 1;
@@ -422,10 +422,6 @@ switch encodingDirection
 
 
 
-
-
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% OLD STUFF, keeping just in case %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -518,8 +514,3 @@ switch encodingDirection
 %         end
 %     end
 % end
-
-
-
-
-
