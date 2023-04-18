@@ -1,25 +1,13 @@
-%% emriSimul.m %%
-%
-% Simluation for a spectral emri analysis. Synthesize some "brain" voxels
-% with specific modulation frequencies, then image those with the emri
-% sequence (take the same line of k space many times, then take the next
-% line many times, etc). 
-%
-% The original image is generated as an array of matrices, where each
-% element of the array has the XYT time series for each line scan.
-% Voxel{n+1}(x,y,t=1) will pick up where Voxel{n}(x,y,t=end of line scan)
-% leaves off, phase wise, so concat( voxel{n}(x,y,:), voxel{n+1}(x,y,:) )
-% should be continuous. If the signal frequency is uneven with the length
-% of each line sample, you get signal dephasing between lines. 
+function emriSimul(varargin)
+% One line description of the function here
 % 
-% The "True image" is just the first {n} of the original image. The reconstructed
-% True image is reconstructed from {n},{n},...{n} rather than
-% {n},{n+1},...{n end} - this is the "shifted recon" image, akin to what we actually measure. 
-% 
-% I am working on a phase-aligned reconstruction, but it is not ready yet.
-% I will make comments on code where to ignore that.
+% Synopsis
+%   emriSimuli(varargin)
 %
-% PARAMETERS:
+% Required
+%    N/A
+%
+% Optional key/value pairs
 %   'xdim': number of voxels in the whole image
 %   'brainSize': size of the brain (centered in image)
 %   'noiseLevel': add gaussian noise of that std to all OG image timepoints
@@ -29,31 +17,84 @@
 %   'amplitude': amplitude of the cosine signal modulation in the brain voxels
 %   'sampleTimeMs': TR length. Takes a sample (1 line) every n miliseconds. i.e. nTimePointsMs = 500 and sampleTimeMS = 5 -> 100 samples
 %   'brainBaseContrast': base contrast of the brain (others are 0).  
+%
+% Output
+%  N/A
+%
+% Description
+%
+%  Simluation for a spectral emri analysis. Synthesize some "brain"
+%  voxels with specific modulation frequencies, then image those with
+%  the emri sequence (take the same line of k space many times, then
+%  take the next line many times, etc).
+%
+%  The original image is generated as an array of matrices, where each
+%  element of the array has the XYT time series for each line scan.
+%  Voxel{n+1}(x,y,t=1) will pick up where Voxel{n}(x,y,t=end of line
+%  scan) leaves off, phase wise, so concat( voxel{n}(x,y,:),
+%  voxel{n+1}(x,y,:) ) should be continuous. If the signal frequency
+%  is uneven with the length of each line sample, you get signal
+%  dephasing between lines.
+% 
+% The "True image" is just the first {n} of the original image. The
+% reconstructed True image is reconstructed from {n},{n},...{n} rather
+% than {n},{n+1},...{n end} - this is the "shifted recon" image, akin
+% to what we actually measure.
+% 
+% I am working on a phase-aligned reconstruction, but it is not ready yet.
+% I will make comments on code where to ignore that.
+%
+% See also
+%
 
 
-function emriSimul(varargin)
+%% Read input key/value pairs
 
-%% SET PARAMETERS %%
-xdim = 17; %pixels x
-brainSize = 4;
-encodingDirection = 'x'; %phase encoding direction
-offsetIndividualVoxels = 0; %1 to add a random offset to voxel phase in 'sine' condition
-phaseShiftBetweenLines = 1; % will randomize the phase between lines instead of making continuous 
-noiseLevel = 0; %std of gaussian noise added to OG image
-ntimePointsMs = 1000; %length of simulation
-hz = 4; %signal frequency in "brain" voxels
-amplitude = 1;
-sampleTimeMs = 5; %TR length
-brainBaseContrast = 1000;
+p = inputParser;
+p.addParameter('xdim',17,@isnumeric);
+p.addParameter('ydim',17,@isnumeric);
+p.addParameter('brainSize',4,@isnumeric);
+p.addParameter('encodingDirection','x',@ischar);
+p.addParameter('offsetIndividualVoxels',0,@islogical);
+p.addParameter('phaseShiftBetweenLines',1,@islogical);
+p.addParameter('noiseLevel',0,@isnumeric);
+p.addParameter('ntimePointsMs',1000,@isinteger);
+p.addParameter('hz',4,@isnumeric);
+p.addParameter('amplitude',1,@isnumeric);
+p.addParameter('sampleTimeMs',5,@isnumeric);
+p.addParameter('brainBaseContrast',1000,@isnumeric);
+p.addParameter('buildConjugateLines',1,@isnumeric);  % Probably should not change
+p.parse;
 
-    %don't change these, probably...
-    buildConjugateLines = 1;
-    numKsamples = ntimePointsMs/sampleTimeMs; %number of samples will be total length/TR length
-    ydim = xdim; %pixels y
-    getArgs(varargin);
+% Build the parameters
 
+xdim = p.Results.xdim; % pixels x
+ydim = p.Results.ydim; % pixels y
+brainSize         = p.Results.brainSize;
+encodingDirection = p.Results.encodingDirection; %phase encoding direction
+offsetIndividualVoxels = p.Results.offsetIndividualVoxels; %1 to add a random offset to voxel phase in 'sine' condition
+phaseShiftBetweenLines = p.Results.phaseShiftBetweenLines; % will randomize the phase between lines instead of making continuous 
+noiseLevel = p.Results.noiseLevel;       %std of gaussian noise added to OG image
+ntimePointsMs = p.Results.ntimePointsMs; %length of simulation
+hz = p.Results.hz;                       %signal frequency in "brain" voxels
+amplitude = p.Results.amplitude;
+sampleTimeMs = p.Results.sampleTimeMs; %TR length
+brainBaseContrast = p.Results.brainBaseContrast;
+buildConjugateLines = p.Results.buildConjugateLines;
+
+numKsamples = ntimePointsMs/sampleTimeMs; %number of samples will be total length/TR length
+
+% JLG Group method
+% getArgs(varargin);
 
 %% MAKE THE ORIGINAL IMAGE %%
+%
+%  nounVerb 
+%   inImage.create
+%   inImage.set
+%   inImage.get
+%   inImage.resample
+%
 originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetIndividualVoxels,phaseShiftBetweenLines);
 
 
@@ -133,23 +174,25 @@ keyboard
 %% makeOriginalImageSine %%
 %%%%%%%%%%%%%%%%%%%%%%%
 function originalImage = makeOriginalImageSine(xdim,ydim,noiseLevel,ntimePointsMs,brainSize,brainBaseContrast,amplitude,hz,offsetVoxels,phaseShiftBetweenLines);
-
-%make the image with a "brain" which will have signals in it
+%
+% 
+% Make the image with a "brain" which will have signals in it
+originalImage = cell(xdim,1);
 for lineSample = 1:xdim
     originalImage{lineSample} = normrnd(0,noiseLevel,xdim,ydim,ntimePointsMs);
 end
 
 %calculate line offsets if randomizing
-if phaseShiftBetweenLines; 
+if phaseShiftBetweenLines 
     lineOffsetMs = round(rand(1,xdim)*ntimePointsMs);
 end
 
 %put a signal of determined frequency but random phase in the "brain" voxels
 brain = (round(xdim/2)-brainSize/2):(round(xdim/2)+brainSize/2); %brain is square here, and xdim=ydim
 
-for voxelx = 1:xdim;
-    for voxely = 1:ydim;
-        if ismember(voxelx,brain) & ismember(voxely,brain)
+for voxelx = 1:xdim
+    for voxely = 1:ydim
+        if ismember(voxelx,brain) && ismember(voxely,brain)
 
             %offset voxel phase if desired
             if offsetVoxels
