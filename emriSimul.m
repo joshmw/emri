@@ -54,7 +54,7 @@ p.addParameter('hz',3,@isnumeric); %signal frequency in "brain" voxels
 p.addParameter('amplitude',1,@isnumeric); %amplitude of hz modulation in sine case
 p.addParameter('signalType','harmonic',@ischar)
 p.addParameter('sampleTimeMs',5,@isnumeric); %TR length
-p.addParameter('brainBaseContrast',2,@isnumeric); %Base brain value 
+p.addParameter('brainBaseContrast',1,@isnumeric); %Base brain value 
 p.addParameter('buildConjugateLines',1,@isnumeric);  %Probably should not change. Half fourier approach.
 % make into parameters
 p.parse;
@@ -64,7 +64,7 @@ p.parse; params = p.Results;
 
 
 %% MAKE THE ORIGINAL IMAGE %%
-inImage = inImageCreate(params,params.signalType);
+inImage = inImageCreate(params);
 
 
 %% GET THE DIFFERENT FREQUENCY IMAGES %%
@@ -75,7 +75,7 @@ ksp = inImageReconPhaseLocked(params, inImage);
 phaseUnlockedKsp = inImageReconPhaseUnlocked(params, inImage);
 
 % try and align temporally...
-realignedKsp = phaseUnlockedKspRealign(params,phaseUnlockedKsp);
+realignedKsp = realignUnlockedKsp(params,phaseUnlockedKsp);
 
 % get the true image sampled at the same frequency as kspace
 trueImage = inImage{1}(:,:,1:params.sampleTimeMs:params.ntimePointsMs);
