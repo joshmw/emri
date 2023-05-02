@@ -70,4 +70,3 @@ switch params.signalType
     otherwise
         error('Unknown inImage type %s\n',imType);
 end
-
