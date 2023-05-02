@@ -1,4 +1,4 @@
-function realignedKsp = kspRealign(phaseUnlockedKsp,params)
+function realignedKsp = kspRealign(params,phaseUnlockedKsp)
 
 realignedKsp = zeros(size(phaseUnlockedKsp));
 
@@ -43,8 +43,13 @@ for row = 1:(floor(params.xdim/2)+1)
     end
   
     if row == floor(params.xdim/2);
-        plotPhaseAlignment(row,params,singleLineFxFyT,singleLineXYT,nophaseSingleLineFxFyT,nophaseSingleLineXYT);
+        %plotPhaseAlignment(row,params,singleLineFxFyT,singleLineXYT,nophaseSingleLineFxFyT,nophaseSingleLineXYT);
     end
 
 end
+
+
+
+function plotPhaseAlignment(row,params,singleLineFxFyT,singleLineXYT,nophaseSingleLineFxFyT,nophaseSingleLineXYT)
+
 
