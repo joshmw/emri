@@ -4,7 +4,7 @@ function emriSimul(varargin)
 %   You can play around with adding and misaligning signals to the underlying movie to test how well the sampling approach works in theory.
 % 
 % Usage
-%   emriSimuli(varargin)
+%   emriSimul(varargin)
 %
 % Required
 %    N/A
@@ -39,22 +39,23 @@ function emriSimul(varargin)
 %   4. Plot results. As of now, the script will plot the image at a single timepoint using ksp, phaseUnlockedKsp, and realignedKsp. It will also plot
 %   example voxel time series from the reconstructed movies. Finally, it will plot voxels outside of the "brain" along the phase-encoding direction.
 %   
+%   emriSimul -> inImageCreate -> inImageReconPhaseLocked -> inImageReconPhaseUnlocked -> realignUnlockedKsp
 
 
 %% Read input key/value pairs %%
 p = inputParser;
-p.addParameter('xdim',17,@isnumeric); % pixels x
-p.addParameter('brainSize',4,@isnumeric);
+p.addParameter('xdim',33,@isnumeric); % pixels x
+p.addParameter('brainSize',6,@isnumeric);
 p.addParameter('encodingDirection','x',@ischar); %phase encoding direction
 p.addParameter('offsetIndividualVoxels',0,@islogical); %1 to add a random offset to voxel phase in 'sine' condition
 p.addParameter('phaseShiftBetweenLines',1,@islogical); % will randomize the phase between lines instead of making continuous 
 p.addParameter('noiseLevel',0,@isnumeric); %std of gaussian noise added to OG image
 p.addParameter('ntimePointsMs',1000,@isinteger); %time length of each line sample
-p.addParameter('hz',3,@isnumeric); %signal frequency in "brain" voxels
+p.addParameter('hz',3+rand,@isnumeric); %signal frequency in "brain" voxels
 p.addParameter('amplitude',1,@isnumeric); %amplitude of hz modulation in sine case
 p.addParameter('signalType','harmonic',@ischar)
 p.addParameter('sampleTimeMs',5,@isnumeric); %TR length
-p.addParameter('brainBaseContrast',1,@isnumeric); %Base brain value 
+p.addParameter('brainBaseContrast',3,@isnumeric); %Base brain value 
 p.addParameter('buildConjugateLines',1,@isnumeric);  %Probably should not change. Half fourier approach.
 % make into parameters
 p.parse;
@@ -133,6 +134,7 @@ plotNonBrainVoxels(params,realignedRecoveredMovie);
 
 %%%%%% END OF SIMULATION %%%%%%%%
 keyboard
+
 
 
 
@@ -220,4 +222,137 @@ xticklabels({0, 'Line 1 acquistition time series', params.ntimePointsMs, 'Line 2
 
 
 
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% mrClassify %%
+%%%%%%%%%%%%%%%%
+
+
+function mrClassify(params)
+
+frequencyToView = 3;
+scan = 3;
+
+v = getMLRView;
+brain = (round(params.xdim/2)-params.brainSize/2):(round(params.xdim/2)+params.brainSize/2);
+
+figure, hold on
+    for col = brain
+        plot(1:params.ydim,cos(v.analyses{1}.overlays(frequencyToView*3).data{scan}(:,col)))
+        plot(1:params.ydim,sin(v.analyses{1}.overlays(frequencyToView*3).data{scan}(:,col)),'--')
+
+    end
+
+figure, hold on
+    for row = 1:params.xdim
+        plot(1:length(brain),cos(v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,brain)))
+        plot(1:length(brain),sin(v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,brain)),'--')
+    end
+
+
+% polar angle plot of vector averages orthogonal to spread direction
+figure,
+meanAmps = []; meanPhases = [];
+for row = 1:params.xdim
+    vectorsX = []; vectorsY = []; amplitudes = [];
+    for col = brain
+        amplitude = v.analyses{1}.overlays(frequencyToView*3-1).data{scan}(row,col);
+        phase = v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,col);
+
+        vectorsX = [vectorsX cos(phase)];
+        vectorsY = [vectorsY sin(phase)];
+        amplitudes = [amplitudes amplitude];
+
+    end
+    
+        meanX = mean(vectorsX);
+        meanY = mean(vectorsY);
+        meanAmplitude = sqrt(meanX^2+meanY^2);
+
+
+        meanPhase = cart2pol(meanX,meanY);
+
+        subplot(1,12,1:6)
+        polarplot([0 meanPhase], [0 meanAmplitude]), hold on, rlim([0 1])
+        meanAmps = [meanAmps meanAmplitude];
+        meanPhases = [meanPhases meanPhase];
+end
+
+subplot(1,12,[9 10])
+histogram(meanAmps,'binEdges',[0.001:.1:1.001]), xlim([0 1])
+xlabel('Amplitude'), title('Amplitude')
+
+subplot(1,12,[11 12]);
+histogram(meanPhases,'binEdges',[-pi:pi/10:pi]),
+xlim([-pi-.1 pi+.1])
+xlabel('Phase (rad)'), title('Phase')
+
+sgtitle('Vector average of rows orthogonal to spread direction')
+
+
+
+
+% polar angle plot of vector averages along spread direction
+figure,
+meanAmps = []; meanPhases = [];
+for col = brain
+    vectorsX = []; vectorsY = []; amplitudes = [];
+    for row = 1:params.xdim
+        amplitude = v.analyses{1}.overlays(frequencyToView*3-1).data{scan}(row,col);
+        phase = v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,col);
+
+        vectorsX = [vectorsX cos(phase)];
+        vectorsY = [vectorsY sin(phase)];
+        amplitudes = [amplitudes amplitude];
+
+    end
+    
+        meanX = mean(vectorsX);
+        meanY = mean(vectorsY);
+        meanAmplitude = sqrt(meanX^2+meanY^2);
+
+
+        meanPhase = cart2pol(meanX,meanY);
+
+        subplot(1,12,1:6)
+        polarplot([0 meanPhase], [0 meanAmplitude]), hold on, rlim([0 1])
+        meanAmps = [meanAmps meanAmplitude];
+        meanPhases = [meanPhases meanPhase];
+end
+
+subplot(1,12,[9 10])
+histogram(meanAmps,'binEdges',[0.001:.1:1.001]), xlim([0 1])
+xlabel('Amplitude'), title('Amplitude')
+
+subplot(1,12,[11 12]);
+histogram(meanPhases,'binEdges',[-pi:pi/10:pi]),
+xlim([-pi-.1 pi+.1])
+xlabel('Phase (rad)'), title('Phase')
+
+sgtitle('Vector average of rows along spread direction')
+
+
+
+
+
+
+
+
+
+
+
+
+
+function extraStuff
+
+% saving a simulation
+ts = reshape(shiftRecoveredMovie,[params.xdim params.ydim 1 params.numKsamples]); 
+[d h] = mlrImageLoad('testName.img');   
+mlrImageSave('33p3hzHomogenousLineOffsetYEncode',ts,h);
+
+
+%running mrClassify with mrsession open
+mrClassify(params)
 
