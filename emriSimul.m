@@ -51,18 +51,17 @@ p.addParameter('offsetIndividualVoxels',0,@islogical); %1 to add a random offset
 p.addParameter('phaseShiftBetweenLines',1,@islogical); % will randomize the phase between lines instead of making continuous 
 p.addParameter('noiseLevel',0,@isnumeric); %std of gaussian noise added to OG image
 p.addParameter('ntimePointsMs',1000,@isinteger); %time length of each line sample
-p.addParameter('hz',3+rand,@isnumeric); %signal frequency in "brain" voxels
+p.addParameter('hz',3,@isnumeric); %signal frequency in "brain" voxels
 p.addParameter('amplitude',1,@isnumeric); %amplitude of hz modulation in sine case
 p.addParameter('signalType','harmonic',@ischar)
 p.addParameter('sampleTimeMs',5,@isnumeric); %TR length
-p.addParameter('brainBaseContrast',3,@isnumeric); %Base brain value 
+p.addParameter('brainBaseContrast',5,@isnumeric); %Base brain value 
 p.addParameter('buildConjugateLines',1,@isnumeric);  %Probably should not change. Half fourier approach.
 % make into parameters
 p.parse;
 p.addParameter('numKsamples',p.Results.ntimePointsMs/p.Results.sampleTimeMs,@isnumeric)
 p.addParameter('ydim',p.Results.xdim,@isnumeric); % pixels y
-p.parse; params = p.Results;
-
+p.parse(varargin{:}); params = p.Results;
 
 %% MAKE THE ORIGINAL IMAGE %%
 inImage = inImageCreate(params);
@@ -100,8 +99,8 @@ plotExampleVoxelTimeseries(params,inImage,voxel);
 timePoint = round(rand*params.numKsamples)
 
 figure; sgtitle('Example images and voxel time series')
-subplot(3,3,1); imagesc(ifft2(ifftshift(ksp(:,:,timePoint)))); title('stationary sampled image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar
-subplot(3,3,4); imagesc(abs(ksp(:,:,timePoint))); title('stationary sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)'),colorbar
+subplot(3,3,1); imagesc(ifft2(ifftshift(ksp(:,:,timePoint)))); title('stationary sampled image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar,
+subplot(3,3,4); imagesc(abs(ksp(:,:,timePoint))); title('stationary sampled kspace'); xlabel('x (frequency)'); ylabel('y (frequency)'),colorbar,
 
 if ~params.buildConjugateLines
 subplot(3,3,2); imagesc(abs(ifft2(ifftshift(phaseUnlockedKsp(:,:,timePoint))))); title('phase-shifted sampled image'); xlabel('x (image)'); ylabel('y (image)'), colormap(gray), colorbar
@@ -133,9 +132,16 @@ plotNonBrainVoxels(params,realignedRecoveredMovie);
 
 
 %%%%%% END OF SIMULATION %%%%%%%%
+
+
 keyboard
-
-
+%save things if you want
+ts = reshape(shiftRecoveredMovie,[params.xdim params.ydim 1 params.numKsamples]); 
+[d h] = mlrImageLoad('testName.img');   
+str = sprintf('amplitude%1.3f',params.amplitude);
+str = replace(str, '.', '_');
+mlrImageSave(str,ts,h);
+close all
 
 
 
@@ -231,12 +237,12 @@ xticklabels({0, 'Line 1 acquistition time series', params.ntimePointsMs, 'Line 2
 function mrClassify(params)
 
 %set parameters and get info
-frequencyToView = 3;
+frequencyToView = 2;
 scan = 1;
 v = getMLRView;
 brain = (round(params.xdim/2)-params.brainSize/2):(round(params.xdim/2)+params.brainSize/2);
 
-
+for scan = 1:20
 
 %% polar angle plot of vector averages orthogonal to spread direction
 figure, meanAmps = []; meanPhases = []; ampMeanPhases = [];
@@ -276,13 +282,13 @@ end
     %plot the phase map
     subplot(2,12,1:2),
     imagesc(v.analyses{1}.overlays(frequencyToView*3).data{scan})
-    title('Phase map'); xlabel('x'), ylabel('y'),colorbar,colormap(jet)
+    title('Phase map'); xlabel('x'), ylabel('y'),colorbar, colormap(jet), caxis([0 2*pi])
 
-    %plot the average row phase map
+    %plot the vector averaged row phase map
     subplot(2,12,3)
     subZeroPhases = meanPhases(:)<0;
     imagesc(meanPhases(:)+subZeroPhases*2*pi)
-    title('VA phase map'), xlabel('x'), ylabel('y'), colorbar,colormap(jet),
+    title('VA phase map'), xlabel('x'), ylabel('y'), colorbar, colormap(jet), caxis([0 2*pi])
 
     %plot a histogram of the averaged amplitudes 
     subplot(2,12,[8 9])
@@ -292,7 +298,7 @@ end
     %plot a histogram of the averaged phases
     subplot(2,12,[11 12]);
     histogram(meanPhases,'binEdges',[-pi:pi/10:pi]), xlim([-pi-.1 pi+.1])
-    xlabel('Phase (rad)'), title('Phase'); sgtitle('Vector average of rows orthogonal to spread direction')
+    xlabel('Phase (rad)'), title('Phase'); 
     
 
     %quantify gradiant with amplitude of best fitting cosine function
@@ -320,11 +326,15 @@ end
             [theta r] = cart2pol(estimate(1),estimate(2));
             theta = rad2deg(theta);
             cosAmplitude = estimate(2);
-            %plot r2 and cosine amplitude
-            subplot(2,12,[19 20]), hold on,
-            scatter(harmonicFreq,r2), ylim([0 1]); xlabel('Cos frequency'),ylabel('r2'),title('r2 over cos frequency sweep')
+            %plot r2
+            subplot(2,12,[17 18]), hold on,
+            scatter(harmonicFreq,r2), ylim([0 1]); xlabel('Model Cosine frequency'),ylabel('Model r2'),title('r2 over cos frequency sweep')
+            %plot gradient cosine amplitude
+            subplot(2,12,[ 20 21]), hold on,
+            scatter(harmonicFreq,cosAmplitude), ylim([-1 1]), xlabel('Model cosine frequency'),ylabel('Model Amplitude'),title('Amp over cos frequency sweep')
+            %plot gradient phase
             subplot(2,12,[ 23 24]), hold on,
-            scatter(harmonicFreq,cosAmplitude), ylim([-1 1]), xlabel('Cos frequency'),ylabel('Amplitude'),title('amp over cos frequency sweep')
+            scatter(harmonicFreq,theta), xlabel('Model cosine frequency'),ylabel('Model cosine phase (def)'),title('Phase over cos frequency sweep')
         end
         
         %grab the best frequency and get the fit
@@ -337,16 +347,24 @@ end
         [theta r] = cart2pol(estimate(1),estimate(2));
         bestTheta = rad2deg(theta);
         bestCosAmplitude = estimate(2);
-        %plot the best estimate on the graph
-        subplot(2,12,[13:16]), hold on
-        plot(cos(y),'Color','b'), plot(sin(x),'Color','r'); ylim([-1 1])
+        %plot the gradient and best cosine fit
+        subplot(2,12,[13:15]), hold on
+        plot(cos(y),'Color','b')
         plot(1:length(y),A*estimate,'--','Color','b');
-        xlabel('Sequential voxel'), ylabel('Vector-averaged phase');title('Phase gradient along spread direction'), legend({'cosine','sin','model (cos)'});
+        ylim([-1 1])
+        xlabel('Sequential voxel'),
+        ylabel('Cosine of vector-averaged phase');
+        title('Phase gradient along spread direction')
+        legend({'cosine','model'});
 
-
-    %sanity check - figure,plot(A*estimate), hold on, plot(cos(y))   
-
-
+        figure(100)
+        subplot(1,3,1), hold on
+        scatter(scan/20,maxr2)
+        subplot(1,3,2), hold on
+        scatter(scan/20,bestFrequency)
+        subplot(1,3,3), hold on
+        scatter(scan/20,bestCosAmplitude)
+end
 
 
 
@@ -393,7 +411,6 @@ subplot(1,12,[11 12]);
 histogram(meanPhases,'binEdges',[-pi:pi/10:pi]),
 xlim([-pi-.1 pi+.1])
 xlabel('Phase (rad)'), title('Phase')
-sgtitle('Phase gradient along spread direction')
 
 figure, hold on
 plot(cos(ampMeanPhases)), plot(sin(ampMeanPhases)), legend({'cosine','sin'}), ylim([-1 1]);
