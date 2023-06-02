@@ -223,103 +223,166 @@ xticklabels({0, 'Line 1 acquistition time series', params.ntimePointsMs, 'Line 2
 
 
 
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%
 %% mrClassify %%
 %%%%%%%%%%%%%%%%
 
 
 function mrClassify(params)
 
+%set parameters and get info
 frequencyToView = 3;
-scan = 3;
-
+scan = 1;
 v = getMLRView;
 brain = (round(params.xdim/2)-params.brainSize/2):(round(params.xdim/2)+params.brainSize/2);
 
-figure, hold on
-    for col = brain
-        plot(1:params.ydim,cos(v.analyses{1}.overlays(frequencyToView*3).data{scan}(:,col)))
-        plot(1:params.ydim,sin(v.analyses{1}.overlays(frequencyToView*3).data{scan}(:,col)),'--')
-
-    end
-
-figure, hold on
-    for row = 1:params.xdim
-        plot(1:length(brain),cos(v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,brain)))
-        plot(1:length(brain),sin(v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,brain)),'--')
-    end
 
 
-% polar angle plot of vector averages orthogonal to spread direction
-figure,
-meanAmps = []; meanPhases = [];
+%% polar angle plot of vector averages orthogonal to spread direction
+figure, meanAmps = []; meanPhases = []; ampMeanPhases = [];
+%loop through relevant voxels by row - only works for x encoding direction
 for row = 1:params.xdim
-    vectorsX = []; vectorsY = []; amplitudes = [];
+    vectorsX = []; vectorsY = []; amplitudes = []; ampVectorsX = []; ampVectorsY = [];
     for col = brain
+        %grab the amplitude and phase
         amplitude = v.analyses{1}.overlays(frequencyToView*3-1).data{scan}(row,col);
         phase = v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,col);
-
+        
+        %grab the individual vectors, with and without amplitude
         vectorsX = [vectorsX cos(phase)];
         vectorsY = [vectorsY sin(phase)];
+        ampVectorsX = [ampVectorsX amplitude*cos(phase)];
+        ampVectorsY = [ampVectorsY amplitude*sin(phase)];    
         amplitudes = [amplitudes amplitude];
 
     end
-    
+        %average the vectors, with and without amplitude
         meanX = mean(vectorsX);
         meanY = mean(vectorsY);
+        ampMeanX = mean(ampVectorsX);
+        ampMeanY = mean(ampVectorsY);
         meanAmplitude = sqrt(meanX^2+meanY^2);
-
-
         meanPhase = cart2pol(meanX,meanY);
+        ampMeanPhase = cart2pol(ampMeanX,ampMeanY);
 
-        subplot(1,12,1:6)
-        polarplot([0 meanPhase], [0 meanAmplitude]), hold on, rlim([0 1])
+        %plot the average vector in polar space and get the sequential averaged phase
+        subplot(2,12,4:7)
+        polarplot([0 meanPhase], [0 meanAmplitude]), title('Vector averages across rows'), hold on, rlim([0 1])
         meanAmps = [meanAmps meanAmplitude];
         meanPhases = [meanPhases meanPhase];
+        ampMeanPhases = [ampMeanPhases ampMeanPhase];
 end
 
-subplot(1,12,[9 10])
-histogram(meanAmps,'binEdges',[0.001:.1:1.001]), xlim([0 1])
-xlabel('Amplitude'), title('Amplitude')
+    %plot the phase map
+    subplot(2,12,1:2),
+    imagesc(v.analyses{1}.overlays(frequencyToView*3).data{scan})
+    title('Phase map'); xlabel('x'), ylabel('y'),colorbar,colormap(jet)
 
-subplot(1,12,[11 12]);
-histogram(meanPhases,'binEdges',[-pi:pi/10:pi]),
-xlim([-pi-.1 pi+.1])
-xlabel('Phase (rad)'), title('Phase')
+    %plot the average row phase map
+    subplot(2,12,3)
+    subZeroPhases = meanPhases(:)<0;
+    imagesc(meanPhases(:)+subZeroPhases*2*pi)
+    title('VA phase map'), xlabel('x'), ylabel('y'), colorbar,colormap(jet),
 
-sgtitle('Vector average of rows orthogonal to spread direction')
+    %plot a histogram of the averaged amplitudes 
+    subplot(2,12,[8 9])
+    histogram(meanAmps,'binEdges',[0.001:.1:1.001]), xlim([0 1])
+    xlabel('Amplitude'), ylabel('count'), title('Amplitude')
+    
+    %plot a histogram of the averaged phases
+    subplot(2,12,[11 12]);
+    histogram(meanPhases,'binEdges',[-pi:pi/10:pi]), xlim([-pi-.1 pi+.1])
+    xlabel('Phase (rad)'), title('Phase'); sgtitle('Vector average of rows orthogonal to spread direction')
+    
+
+    %quantify gradiant with amplitude of best fitting cosine function
+        %make y
+        y = ampMeanPhases(1:round(end/2));
+        y = y(:);
+        %make x go between 0 and 2pi, non-inclusive
+        x = linspace(0,2*pi,length(y)+1);
+        x = x(1:end-1);
+        x = x(:);
+        %find the best frequency to describe the gradient by maximizing r2
+        testFrequencies = .05:.05:5; r2s = [];
+        for harmonicFreq = testFrequencies
+            A = ones(length(y),3);
+            A(:,1) = cos(harmonicFreq*x);
+            A(:,2) = sin(harmonicFreq*x);
+            %compute least squares estimate for harmonic frequency
+            estimate = inv(A'*A)*A'*cos(y);
+            %get r2
+            residualVariance = var(cos(y)-A*estimate);
+            originalVariance = var(cos(y));
+            r2 = 1 - residualVariance/originalVariance;
+            r2s = [r2s r2];
+            %get theta and amplitude
+            [theta r] = cart2pol(estimate(1),estimate(2));
+            theta = rad2deg(theta);
+            cosAmplitude = estimate(2);
+            %plot r2 and cosine amplitude
+            subplot(2,12,[19 20]), hold on,
+            scatter(harmonicFreq,r2), ylim([0 1]); xlabel('Cos frequency'),ylabel('r2'),title('r2 over cos frequency sweep')
+            subplot(2,12,[ 23 24]), hold on,
+            scatter(harmonicFreq,cosAmplitude), ylim([-1 1]), xlabel('Cos frequency'),ylabel('Amplitude'),title('amp over cos frequency sweep')
+        end
+        
+        %grab the best frequency and get the fit
+        [maxr2, bestFrequencyIndex] = max(r2s);
+        bestFrequency = testFrequencies(bestFrequencyIndex);
+        A = ones(length(y),3);
+        A(:,1) = cos(bestFrequency*x);
+        A(:,2) = sin(bestFrequency*x);
+        estimate = inv(A'*A)*A'*cos(y);
+        [theta r] = cart2pol(estimate(1),estimate(2));
+        bestTheta = rad2deg(theta);
+        bestCosAmplitude = estimate(2);
+        %plot the best estimate on the graph
+        subplot(2,12,[13:16]), hold on
+        plot(cos(y),'Color','b'), plot(sin(x),'Color','r'); ylim([-1 1])
+        plot(1:length(y),A*estimate,'--','Color','b');
+        xlabel('Sequential voxel'), ylabel('Vector-averaged phase');title('Phase gradient along spread direction'), legend({'cosine','sin','model (cos)'});
+
+
+    %sanity check - figure,plot(A*estimate), hold on, plot(cos(y))   
 
 
 
 
-% polar angle plot of vector averages along spread direction
+
+
+
+
+%% polar angle plot of vector averages along spread direction
 figure,
-meanAmps = []; meanPhases = [];
+meanAmps = []; meanPhases = []; ampMeanPhases = [];
 for col = brain
-    vectorsX = []; vectorsY = []; amplitudes = [];
+    vectorsX = []; vectorsY = []; amplitudes = []; ampVectorsX = []; ampVectorsY = [];
     for row = 1:params.xdim
         amplitude = v.analyses{1}.overlays(frequencyToView*3-1).data{scan}(row,col);
         phase = v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,col);
 
         vectorsX = [vectorsX cos(phase)];
         vectorsY = [vectorsY sin(phase)];
+        ampVectorsX = [ampVectorsX amplitude*cos(phase)];
+        ampVectorsY = [ampVectorsY amplitude*sin(phase)];  
         amplitudes = [amplitudes amplitude];
 
     end
     
         meanX = mean(vectorsX);
         meanY = mean(vectorsY);
+        ampMeanX = mean(ampVectorsX);
+        ampMeanY = mean(ampVectorsY);
         meanAmplitude = sqrt(meanX^2+meanY^2);
-
-
         meanPhase = cart2pol(meanX,meanY);
+        ampMeanPhase = cart2pol(ampMeanX,ampMeanY);
 
         subplot(1,12,1:6)
         polarplot([0 meanPhase], [0 meanAmplitude]), hold on, rlim([0 1])
         meanAmps = [meanAmps meanAmplitude];
         meanPhases = [meanPhases meanPhase];
+        ampMeanPhases = [ampMeanPhases ampMeanPhase];
 end
 
 subplot(1,12,[9 10])
@@ -330,9 +393,11 @@ subplot(1,12,[11 12]);
 histogram(meanPhases,'binEdges',[-pi:pi/10:pi]),
 xlim([-pi-.1 pi+.1])
 xlabel('Phase (rad)'), title('Phase')
+sgtitle('Phase gradient along spread direction')
 
-sgtitle('Vector average of rows along spread direction')
-
+figure, hold on
+plot(cos(ampMeanPhases)), plot(sin(ampMeanPhases)), legend({'cosine','sin'}), ylim([-1 1]);
+xlabel('Sequential voxel'), ylabel('Vector-averaged phase');title('Vector-averaged phase orthoganl to spread direction')
 
 
 
@@ -356,3 +421,18 @@ mlrImageSave('33p3hzHomogenousLineOffsetYEncode',ts,h);
 %running mrClassify with mrsession open
 mrClassify(params)
 
+
+
+%old
+figure, hold on
+    for col = brain
+        plot(1:params.ydim,cos(v.analyses{1}.overlays(frequencyToView*3).data{scan}(:,col)))
+        plot(1:params.ydim,sin(v.analyses{1}.overlays(frequencyToView*3).data{scan}(:,col)),'--')
+
+    end
+
+figure, hold on
+    for row = 1:params.xdim
+        plot(1:length(brain),cos(v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,brain)))
+        plot(1:length(brain),sin(v.analyses{1}.overlays(frequencyToView*3).data{scan}(row,brain)),'--')
+    end
