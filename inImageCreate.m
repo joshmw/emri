@@ -29,7 +29,7 @@ switch params.signalType
         % Shifts the time series for a specific x-line (each x-line is
         % a cell)
         if params.phaseShiftBetweenLines
-            lineOffsetMs = round(rand(1,params.xdim)*params.ntimePointsMs);
+            lineOffsetMs = round(rand(1,params.xdim)*params.ntimePointsMs*params.phaseShiftBetweenLinesMagnitude);
         end
 
         % Determine the brain voxel locations
@@ -43,7 +43,7 @@ switch params.signalType
                     % Shifts the time series across all cells for a specific voxel
                     if params.offsetIndividualVoxels
                         % makes the voxels different phase from each other
-                        voxelOffset = round(rand(1,1) * params.ntimePointsMs); 
+                        voxelOffset = round(rand(1,1) * params.ntimePointsMs * params.offsetIndividualVoxelsMagnitude); 
                     else
                         voxelOffset = 0;
                     end
