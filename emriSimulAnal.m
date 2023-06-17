@@ -7,6 +7,7 @@
 function emriSimulAnal(params)
 
 %set parameters and draw the brain
+graphStuff = 0;
 frequencyToView = 3;
 scan = 1;
 v = getMLRView;
@@ -18,7 +19,7 @@ spreadMask = ones(params.xdim,1)*brainVec-brainMask;
 outsideMask = abs(1-ones(params.xdim,1)*brainVec);
 
 
-for scan = 10
+for scan = 1:51
 
 %% polar angle plot of vector averages orthogonal to spread direction
 figure, meanAmps = []; meanPhases = []; ampMeanPhases = [];
@@ -133,6 +134,9 @@ end
         title('Phase gradient along spread direction')
         legend({'cosine','model'});
 
+        %close if needed
+        checkIndividualGraphClose(graphStuff)
+        
         %grab the overlays
         amplitudeOverlay = v.analyses{1}.overlays(frequencyToView*3-1).data{scan};
         phaseOverlay = v.analyses{1}.overlays(frequencyToView*3).data{scan};
@@ -161,12 +165,15 @@ end
             subplot(2,2,2),histogram(coherenceOverlay(outsideMask>0),'FaceColor','m','BinEdges',[0:.05:1],'FaceAlpha',.3,'EdgeColor','none','Normalization','probability'); xlim([0 1])
             subplot(2,2,3),histogram(phaseOverlay(outsideMask>0),'FaceColor','m','BinEdges',[0:pi/10:2*pi],'FaceAlpha',.3,'EdgeColor','none','Normalization','probability'); xlim([0 2*pi])
             subplot(2,2,4),histogram(autocorOverlay(outsideMask>0),'FaceColor','m','BinEdges',[0:.05:1],'FaceAlpha',.3,'EdgeColor','none','Normalization','probability'); xlim([0 1])
-
+                
+         %close if needed
+         checkIndividualGraphClose(graphStuff)
+            
  
         %plot the summary figures for the phase gradient
         figure(100)
         subplot(1,3,1), hold on
-        scatter(scan,maxr2,'filled')
+        scatter(scan,maxr2,'filled'),ylim([0 1]);
         subplot(1,3,2), hold on
         scatter(scan,bestFrequency,'filled')
         subplot(1,3,3), hold on
@@ -175,26 +182,61 @@ end
         %summary figures for overlay statistics
         figure(101)
         subplot(2,2,1), hold on
-        scatter(scan,mean(amplitudeOverlay(brainMask>0)),'MarkerFaceColor','g','MarkerEdgeColor','w');
-        scatter(scan,mean(amplitudeOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w');
-        scatter(scan,mean(amplitudeOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w');
-
+        scatter(scan,mean(amplitudeOverlay(brainMask>0)),'MarkerFaceColor','g','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(amplitudeOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(amplitudeOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        xlabel('Scan'),ylabel('Average amplitude'),title('Amplitude average over sweep'), ylim([0 2.5]),
+            
         subplot(2,2,2), hold on,
-        scatter(scan,mean(coherenceOverlay(brainMask>0)),'MarkerFaceColor','g','MarkerEdgeColor','w');
-        scatter(scan,mean(coherenceOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w');
-        scatter(scan,mean(coherenceOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w');
+        scatter(scan,mean(coherenceOverlay(brainMask>0)),'MarkerFaceColor','g','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(coherenceOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(coherenceOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        xlabel('Scan'), ylabel('Average coherence'), title('Coherence average over sweep'), ylim([0 1]),
 
         subplot(2,2,3), hold on,
-        scatter(scan,mean(phaseOverlay(brainMask>0)),'MarkerFaceColor','g'),'MarkerEdgeColor','w';
-        scatter(scan,mean(phaseOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w');
-        scatter(scan,mean(phaseOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w'); 
+        scatter(scan,mean(phaseOverlay(brainMask>0)),'MarkerFaceColor','g','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(phaseOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(phaseOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w','MarkerFaceAlpha',.5); 
+        xlabel('Scan'), ylabel('Average phase'), title('Phase average over sweep'), ylim([0 2*pi]),
 
         subplot(2,2,4), hold on,
-        scatter(scan,mean(autocorOverlay(brainMask>0)),'MarkerFaceColor','g','MarkerEdgeColor','w');
-        scatter(scan,mean(autocorOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w');
-        scatter(scan,mean(autocorOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w');
+        scatter(scan,mean(autocorOverlay(brainMask>0)),'MarkerFaceColor','g','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(autocorOverlay(spreadMask>0)),'MarkerFaceColor','c','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        scatter(scan,mean(autocorOverlay(outsideMask>0)),'MarkerFaceColor','m','MarkerEdgeColor','w','MarkerFaceAlpha',.5);
+        xlabel('Scan'), ylabel('Average autocorrelation'), title('Autocorrelation average over sweep'), ylim([0 1]),
 
 end
 
 keyboard
+
+
+
+
+function checkIndividualGraphClose(graphStuff)
+%if you don't have graphStuff set to 1, will close the figure.
+%this function autoplots every scan and sometimes that is annoying.
+if ~graphStuff
+    close
+end
+
+
+function plotFrequencySpectrum
+v = getMLRView;
+ts = squeeze(loadTSeries(v));    
+highAC = v.analyses{1}.overlays(end).data{curScan} > .5;
+allFtSeries = zeros(1,100);
+
+for row = 1:64 
+    for col = 1:64
+        if highAC(row,col) == 1;
+            ftSeries = squeeze(abs(fft(ts(row,col,:))));
+            ftSeries = ftSeries(2:101);
+            ftSeries = ftSeries/sum(ftSeries);
+            %plot(1:50,ftSeries(1:50),'LineWidth',1);
+            allFtSeries = allFtSeries + ftSeries;
+        end
+    end
+end
+
+plot(1:50,allFtSeries(1:50)/sum(sum(highAC)))
 
