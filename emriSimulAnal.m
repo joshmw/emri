@@ -173,11 +173,11 @@ end
         %plot the summary figures for the phase gradient
         figure(100)
         subplot(1,3,1), hold on
-        scatter(scan,maxr2,'filled'),ylim([0 1]);
+        scatter(scan,maxr2,'filled','MarkerEdgeColor','w','MarkerFaceColor','b'),ylim([0 1]);
         subplot(1,3,2), hold on
-        scatter(scan,bestFrequency,'filled')
+        scatter(scan,bestFrequency,'filled','MarkerEdgeColor','w','MarkerFaceColor','b'),ylim([0 4])
         subplot(1,3,3), hold on
-        scatter(scan,bestCosAmplitude,'filled')
+        scatter(scan,bestCosAmplitude,'filled','MarkerEdgeColor','w','MarkerFaceColor','b')
         
         %summary figures for overlay statistics
         figure(101)
@@ -207,6 +207,7 @@ end
 
 end
 
+
 keyboard
 
 
@@ -223,7 +224,7 @@ end
 function plotFrequencySpectrum
 v = getMLRView;
 ts = squeeze(loadTSeries(v));    
-highAC = v.analyses{1}.overlays(end).data{curScan} > .5;
+highAC = v.analyses{1}.overlays(end).data{v.curScan} > .5;
 allFtSeries = zeros(1,100);
 
 for row = 1:64 
@@ -238,5 +239,6 @@ for row = 1:64
     end
 end
 
-plot(1:50,allFtSeries(1:50)/sum(sum(highAC)))
-
+figure,
+plot(1:50,allFtSeries(1:50)/sum(sum(highAC)),'--')
+ylim([0 .15]);
