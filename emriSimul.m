@@ -43,23 +43,36 @@ function emriSimul(varargin)
 
 %% Read input key/value pairs %%
 p = inputParser;
-p.addParameter('xdim',33,@isnumeric); % pixels x
-p.addParameter('brainSize',8,@isnumeric);
-p.addParameter('encodingDirection','x',@ischar); %frequency encoding direction - orthogonal to the phase-encoding direction
+%size of image and brain
+p.addParameter('xdim',65,@isnumeric); % pixels x
+p.addParameter('brainSize',16,@isnumeric);
+%type of underlying noise signal. if harmonic, set the amplitude/frequency of modulation and line offset. if pink, set std.
+p.addParameter('signalType','sine',@ischar)
+p.addParameter('addPinkNoise',1,@islogical)
+p.addParameter('amplitude',.169/2,@isnumeric); %amplitude of hz modulation in sine case
+p.addParameter('hz',7,@isnumeric); %signal frequency in "brain" voxels
+p.addParameter('phaseShiftBetweenLines',0,@islogical); % will randomize the phase between lines instead of making continuous 
+p.addParameter('phaseShiftBetweenLinesMagnitude',1,@isnumeric); %amount of shift between lines. 0 is none, 1 is fully random.
+p.addParameter('pinkNoiseStd',1.07,@isnumeric); %amplitude of pink noise, if you are adding it
+%set individual voxel offset if desired.
 p.addParameter('offsetIndividualVoxels',0,@islogical); %1 to add a random offset to voxel phase in 'sine' condition
 p.addParameter('offsetIndividualVoxelsMagnitude',1,@isnumeric); %how randomized individual voxel offset is. 0 is none (all same), 1 is fully random.
-p.addParameter('phaseShiftBetweenLines',1,@islogical); % will randomize the phase between lines instead of making continuous 
-p.addParameter('phaseShiftBetweenLinesMagnitude',1,@isnumeric); %amount of shift between lines. 0 is none, 1 is fully random.
+%add a visual response if desired. set the amount of shift, amplitude, and mean/std of peak.
+p.addParameter('addSignal',0,@islogical); %add a gaussian signal
+p.addParameter('signalShiftMagnitude',0,@isnumeric); %how much to shift the signal as % of the length of time series.
+p.addParameter('signalAmp',.169,@isnumeric); % amplitude of the signal
+p.addParameter('signalMean',100,@isnumeric);
+p.addParameter('signalStd',15,@isnumeric);
+%add gaussian noise to entire image if desired.
 p.addParameter('noiseLevel',0,@isnumeric); %std of gaussian noise added to OG image
-p.addParameter('ntimePointsMs',1000,@isinteger); %time length of each line sample
-p.addParameter('hz',3,@isnumeric); %signal frequency in "brain" voxels
-p.addParameter('amplitude',1,@isnumeric); %amplitude of hz modulation in sine case
-p.addParameter('signalType','harmonic',@ischar)
+%other things you probably should not change - TR, encoding direction, length, luminance, etc.
+p.addParameter('encodingDirection','x',@ischar); %frequency encoding direction - orthogonal to the phase-encoding direction
+p.addParameter('ntimePointsMs',1000,@isnumeric); %time length of each line sample
 p.addParameter('sampleTimeMs',5,@isnumeric); %TR length
 p.addParameter('brainBaseContrast',100,@isnumeric); %Base brain value 
 p.addParameter('buildConjugateLines',1,@isnumeric);  %Probably should not change. Half fourier approach.
 p.addParameter('simNumber',1,@isnumeric);  %Probably should not change. Half fourier approach.
-p.addParameter('graphStuff',1,@isnumeric);  %Probably should not change. Half fourier approach.
+p.addParameter('graphStuff',1,@isnumeric);  %
 p.addParameter('rng',100,@isnumeric); %rng seed - defaults to 100.
 
 % make into parameters
@@ -70,7 +83,7 @@ params.numKsamples = floor(params.ntimePointsMs/params.sampleTimeMs);
 params.ydim = params.xdim;
 
 params
-sprintf('lineOffsetSweepDiffSeeds0619')
+sprintf('0725frequencyAttempt')
 rng(params.rng) % set seed if you want to examine the effect of specific parameters
 rng
 
@@ -136,7 +149,7 @@ subplot(3,3,9), hold on, title('Non-brain voxel timeseries (realigned from shift
 plotNonBrainVoxels(params,realignedRecoveredMovie);
 
 end
-
+keyboard
 %%%%%% END OF SIMULATION %%%%%%%%
 
 %save things if you want
@@ -149,14 +162,14 @@ end
 
 %saving on luxardo
 ts = reshape(shiftRecoveredMovie,[params.xdim params.ydim 1 params.numKsamples]);
-j = sprintf('lineOffset%4.4g',params.phaseShiftBetweenLinesMagnitude*100)
+j = sprintf('Seed%4.4gFrequencyAttempt',params.rng)
 j = replace(j, '.', '_');
 j = replace(j, ' ', '')
 save(j,'ts','params');
 close all
 
 ts = reshape(realignedRecoveredMovie,[params.xdim params.ydim 1 params.numKsamples]);
-save(strcat('realigned',j),'ts');
+save(strcat('realigned',j),'ts','params');
 %for TR = [2 4 5 8 10 20 25 40 50 100], emriSimul('sampleTimeMs',TR),end
 
 
@@ -193,7 +206,7 @@ switch params.encodingDirection
             end
         end
 end
-ylim([-params.amplitude params.amplitude])
+%ylim([-params.amplitude params.amplitude])
 
 
 %% plotBrainVoxels %%
