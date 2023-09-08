@@ -1,6 +1,6 @@
 function emriSimul(varargin)
 % Purpose
-%   Creates a movie, then creates new movies by sampling the original movie the way described in Toi et al. (line scans).
+%   Creates a ground-truth image time series, then creates new time series by sampling the original time series the way described in Toi et al. (line scans).
 %   You can play around with adding and misaligning signals to the underlying movie to test how well the sampling approach works in theory.
 % 
 % Usage
@@ -10,15 +10,22 @@ function emriSimul(varargin)
 %    N/A
 %
 % Optional key/value pairs
-%   'xdim': size of the image (x by x)
-%   'brainSize': size of the brain (centered in image)
+%   'xdim': size of the image (x by x). This needs to be odd the way the simulation is set up to sample conjugate pairs.
+%   'brainSize': size of the square brain (centered in image)
+%   'signalType': Specifices type of systematic modulation. Right now, only supports harmonic (sine).
+%   'addPinkNoise': 1 to add independent pink noise to every line acquisition.
+%   'pinkNoiseStd': The standard deviation of the pink noise added.
 %   'noiseLevel': add gaussian noise of that std to all inImage timepoints
 %   'ntimePointsMs': length of one line acquisition
 %   'sampleTimeMs': TR length. Takes a sample (1 line) every n miliseconds. i.e. nTimePointsMs = 500 and sampleTimeMS = 5 -> 100 samples of each line.
 %   'hz': frequency of simulated signal in brain voxels (cycles/1000 ms)
-%   'encodingDirection': the direction in wich you sample the individual lines
+%   'encodingDirection': the direction in wich you sample the individual lines. The specified direction is the FREQUENCY encoding direction, or the
+%    fast acquisition direction.
 %   'amplitude': amplitude of the cosine signal modulation in the brain voxels
 %   'brainBaseContrast': base contrast of the brain (others pixels are 0).  
+%   'phaseShiftBetweenLines': In the harmonic modulation case, this will randomize the phase of the modulation between each line acquisition.
+%   'phaseShfitBetweenLinesMagnitude': Amount of randomization between line acquisitions. 1 = totally random, 0 = the same.
+%   'pinkNoiseStd': 
 %
 % Output
 %   N/A
@@ -26,7 +33,7 @@ function emriSimul(varargin)
 % Description
 %  
 %  There are 4 main steps:
-%   1. Create an "inImage" that you reconstruct from. This image will have a "brain", which signals go into. Other voxels are 0.
+%   1. Create an "inImage", which is your ground-truth time series that you reconstruct from. This image will have a "brain", which signals go into. Other voxels are 0.
 %   2. Mimic the Toi et al. procedure by going through the movie and, at each TR, fourier transform the image and grab single lines of the frequency
 %   image at a time. The image is n cells (n=number of lines) of dimension xdim, ydim, ntimePointsMs. Each line is sampled sequentially from one cell.
 %   This happens:
@@ -36,26 +43,32 @@ function emriSimul(varargin)
 %       waves present during the entire acquisition will not be in perfect phase between each line collection. This creates "phaseUnlockedKsp".
 %   3. Try and align the "phaseUnlockedKsp" from step 4. To do so, create movies from individual lines and try to align temporally in time by take the
 %   absolute value of the fourier transform along the time dimension. There are other steps explained in the code. This creates "realignedKsp".
-%   4. Plot results. As of now, the script will plot the image at a single timepoint using ksp, phaseUnlockedKsp, and realignedKsp. It will also plot
+%   We don't really use this, but it's interesting to see. You can realign single component modulation to be cosine phase.
+%   4. Plot results. As of now, the script will plot the image at a single timepoint using ksp (ground-truth), phaseUnlockedKsp, and realignedKsp. It will also plot
 %   example voxel time series from the reconstructed movies. Finally, it will plot voxels outside of the "brain" along the phase-encoding direction.
 %   
-%   emriSimul -> inImageCreate -> inImageReconPhaseLocked -> inImageReconPhaseUnlocked -> realignUnlockedKsp
+%   The flow of scripts goes: emriSimul -> inImageCreate -> inImageReconPhaseLocked -> inImageReconPhaseUnlocked -> realignUnlockedKsp.
+%
+%   Created by Josh Wilson some time in early 2023. Email joshmw@stanford.edu for questions.
+%
+%
 
 %% Read input key/value pairs %%
 p = inputParser;
 %size of image and brain
-p.addParameter('xdim',65,@isnumeric); % pixels x
-p.addParameter('brainSize',16,@isnumeric);
+p.addParameter('xdim',33,@isnumeric); % pixels x
+p.addParameter('brainSize',8,@isnumeric);
 %type of underlying noise signal. if harmonic, set the amplitude/frequency of modulation and line offset. if pink, set std.
 p.addParameter('signalType','sine',@ischar)
-p.addParameter('addPinkNoise',1,@islogical)
-p.addParameter('amplitude',.169/2,@isnumeric); %amplitude of hz modulation in sine case
-p.addParameter('hz',7,@isnumeric); %signal frequency in "brain" voxels
-p.addParameter('phaseShiftBetweenLines',0,@islogical); % will randomize the phase between lines instead of making continuous 
+p.addParameter('addPinkNoise',0,@islogical)
+p.addParameter('amplitude',1,@isnumeric); %amplitude of hz modulation in sine case
+p.addParameter('hz',3,@isnumeric); %signal frequency in "brain" voxels
+p.addParameter('phaseShiftBetweenLines',1,@islogical); % will randomize the phase between lines instead of making continuous 
 p.addParameter('phaseShiftBetweenLinesMagnitude',1,@isnumeric); %amount of shift between lines. 0 is none, 1 is fully random.
-p.addParameter('pinkNoiseStd',1.07,@isnumeric); %amplitude of pink noise, if you are adding it
+p.addParameter('pinkNoiseStd',0,@isnumeric); %amplitude of pink noise, if you are adding it
 %set individual voxel offset if desired.
-p.addParameter('offsetIndividualVoxels',0,@islogical); %1 to add a random offset to voxel phase in 'sine' condition
+p.addParameter('numVoxelGroups',1,@isnumeric); %number of groups of voxels that oscillate together.
+p.addParameter('offsetIndividualVoxels',1,@islogical); %1 to add a random offset to voxel phase in 'sine' condition
 p.addParameter('offsetIndividualVoxelsMagnitude',1,@isnumeric); %how randomized individual voxel offset is. 0 is none (all same), 1 is fully random.
 %add a visual response if desired. set the amount of shift, amplitude, and mean/std of peak.
 p.addParameter('addSignal',0,@islogical); %add a gaussian signal
@@ -66,14 +79,14 @@ p.addParameter('signalStd',15,@isnumeric);
 %add gaussian noise to entire image if desired.
 p.addParameter('noiseLevel',0,@isnumeric); %std of gaussian noise added to OG image
 %other things you probably should not change - TR, encoding direction, length, luminance, etc.
-p.addParameter('encodingDirection','x',@ischar); %frequency encoding direction - orthogonal to the phase-encoding direction
+p.addParameter('encodingDirection','x',@ischar); %FREQUENCY encoding direction (fast) - orthogonal to the phase-encoding direction
 p.addParameter('ntimePointsMs',1000,@isnumeric); %time length of each line sample
 p.addParameter('sampleTimeMs',5,@isnumeric); %TR length
 p.addParameter('brainBaseContrast',100,@isnumeric); %Base brain value 
 p.addParameter('buildConjugateLines',1,@isnumeric);  %Probably should not change. Half fourier approach.
 p.addParameter('simNumber',1,@isnumeric);  %Probably should not change. Half fourier approach.
 p.addParameter('graphStuff',1,@isnumeric);  %
-p.addParameter('rng',100,@isnumeric); %rng seed - defaults to 100.
+p.addParameter('rng',100,@isnumeric); %rng seed - defaults to 100;
 
 % make into parameters
 p.parse;
@@ -81,11 +94,7 @@ p.addParameter('numKsamples',floor(p.Results.ntimePointsMs/p.Results.sampleTimeM
 p.parse(varargin{:}); params = p.Results;
 params.numKsamples = floor(params.ntimePointsMs/params.sampleTimeMs);
 params.ydim = params.xdim;
-
-params
-sprintf('0725frequencyAttempt')
 rng(params.rng) % set seed if you want to examine the effect of specific parameters
-rng
 
 %% MAKE THE ORIGINAL IMAGE %%
 inImage = inImageCreate(params);
@@ -162,7 +171,7 @@ keyboard
 
 %saving on luxardo
 ts = reshape(shiftRecoveredMovie,[params.xdim params.ydim 1 params.numKsamples]);
-j = sprintf('Seed%4.4gFrequencyAttempt',params.rng)
+j = sprintf('numGroups1dim%4.4g',params.numVoxelGroups)
 j = replace(j, '.', '_');
 j = replace(j, ' ', '')
 save(j,'ts','params');
@@ -231,7 +240,7 @@ function plotExampleVoxelTimeseries(params,inImage,voxel)
 %for 2 example voxels, concatenate the time series from the first 3 cells
 wholeSeries = []; wholeSeries2 = [];
 for i  = 1:3, wholeSeries = [wholeSeries squeeze(inImage{i}(voxel,voxel,:))']; end     
-for i  = 1:3, wholeSeries2 = [wholeSeries2 squeeze(inImage{i}(voxel+1,voxel+1,:))']; end
+for i  = 1:3, wholeSeries2 = [wholeSeries2 squeeze(inImage{i}(voxel+2,voxel+2,:))']; end
 
 %plot the time series
 figure, hold on,
