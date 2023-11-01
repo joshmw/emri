@@ -10,7 +10,7 @@ for subject = 1:length(SIDs);
     cd(SIDs(subject));
     %create the view and go to ungated scan
     v = newView;
-    v = viewSet(v,'curGroup','Averages')
+    v = viewSet(v,'curGroup','averagesResized')
     v = viewSet(v,'curScan',2)
     v = loadAnalysis(v,'emriAnal');
 
@@ -30,14 +30,14 @@ end
 amplitudes = amplitudes(sortorder)
 
 %fit a 1/f spectrum
-oneOverF = fittype('a*(1/x)+b', 'independent', 'x', 'dependent', 'y' );
-oneOverFSquared = fittype('(a*(1/x^2)+b)', 'independent', 'x', 'dependent', 'y' );
+oneOverF = fittype('a*(1/x) + b', 'independent', 'x', 'dependent', 'y' );
+oneOverFSquared = fittype('(a*(1/x^2) + b)', 'independent', 'x', 'dependent', 'y' );
 opts = fitoptions( 'Method', 'NonlinearLeastSquares' );
 opts.Display = 'Off';
 opts.StartPoint = [0 0];
 
-ampFit = fit(frequencies',amplitudes',oneOverF,opts)
-powerFit = fit(frequencies',amplitudes.^2',oneOverF,opts)
+[ampFit ampFitGof] = fit(frequencies',amplitudes',oneOverF,opts)
+[powerFit powerFitGof] = fit(frequencies',amplitudes.^2',oneOverFSquared,opts)
 
 %show the amp fits
 figure(150),

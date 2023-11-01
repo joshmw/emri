@@ -1,25 +1,29 @@
 
 %%%%%%%%%%%%%%%%
-%% mrClassify %%
+%% emriSimulAnal %%
 %%%%%%%%%%%%%%%%
-
-
-function emriSimulAnal(params)
+function emriSimulAnal(params,scans)
 
 %set parameters and draw the brain
-graphStuff = 0;
+graphStuff = 1;
 frequencyToView = 3;
 scan = 1;
 v = getMLRView;
 brain = (round(params.xdim/2)-params.brainSize/2):(round(params.xdim/2)+params.brainSize/2);
 brainVec = [zeros(1,min(brain)-1) ones(1,length(brain)) zeros(1,params.xdim-max(brain))];
 
+%make the masks
 brainMask = (brainVec' * brainVec);
 spreadMask = ones(params.xdim,1)*brainVec-brainMask;
 outsideMask = abs(1-ones(params.xdim,1)*brainVec);
 
+%if we didn't pass in scans, just use the current scan
+if scans == 0
+    scans = v.curScan;
+end
 
-for scan = 1:51
+%loop over scans and do analyses
+for scan = scans
 
 %% polar angle plot of vector averages orthogonal to spread direction
 figure, meanAmps = []; meanPhases = []; ampMeanPhases = [];
@@ -80,7 +84,9 @@ end
 
     %quantify gradiant with amplitude of best fitting cosine function
         %make y
-        y = ampMeanPhases(1:round(end/2));
+        %y = ampMeanPhases(1:round(end/2));
+        y = ampMeanPhases;
+
         y = y(:);
         %make x go between 0 and 2pi, non-inclusive
         x = linspace(0,2*pi,length(y)+1);
@@ -208,7 +214,22 @@ end
 end
 
 
-keyboard
+figure,subplot(1,2,1);
+
+cohBrain = mean(coherenceOverlay(brainMask>0))
+cohSpread = mean(coherenceOverlay(spreadMask>0))
+cohOutside = mean(coherenceOverlay(outsideMask>0))
+
+autocorBrain = mean(autocorOverlay(brainMask>0))
+autocorSpread = mean(autocorOverlay(spreadMask>0))
+autocorOutside = mean(autocorOverlay(outsideMask>0))
+
+subplot(1,2,1), hold on
+title('Flipped')
+scatter(1,autocorBrain,'MarkerFaceColor','g','MarkerEdgeColor','w')
+scatter(2,autocorSpread,'MarkerFaceColor','c','MarkerEdgeColor','w')
+scatter(3,autocorOutside,'MarkerFaceColor','m','MarkerEdgeColor','w')
+xlim([0 4]), ylim([0 1])
 
 
 
@@ -219,26 +240,3 @@ function checkIndividualGraphClose(graphStuff)
 if ~graphStuff
     close
 end
-
-
-function plotFrequencySpectrum
-v = getMLRView;
-ts = squeeze(loadTSeries(v));    
-highAC = v.analyses{1}.overlays(end).data{v.curScan} > .5;
-allFtSeries = zeros(1,100);
-
-for row = 1:64 
-    for col = 1:64
-        if highAC(row,col) == 1;
-            ftSeries = squeeze(abs(fft(ts(row,col,:))));
-            ftSeries = ftSeries(2:101);
-            ftSeries = ftSeries/sum(ftSeries);
-            %plot(1:50,ftSeries(1:50),'LineWidth',1);
-            allFtSeries = allFtSeries + ftSeries;
-        end
-    end
-end
-
-figure,
-plot(1:50,allFtSeries(1:50)/sum(sum(highAC)),'--')
-ylim([0 .15]);

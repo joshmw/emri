@@ -1,4 +1,6 @@
-function realignedKsp = kspRealign(params,phaseUnlockedKsp)
+function realignedKsp = realignUnlockedKsp(params,phaseUnlockedKsp)
+
+graphAlignment = 0;
 
 realignedKsp = zeros(size(phaseUnlockedKsp));
 
@@ -43,7 +45,9 @@ for row = 1:(floor(params.xdim/2)+1)
     end
   
     if row == floor(params.xdim/2);
-        plotPhaseAlignment(row,params,singleLineFxFyT,singleLineXYT,nophaseSingleLineFxFyT,nophaseSingleLineXYT);
+        if graphAlignment
+            plotPhaseAlignment(row,params,singleLineFxFyT,singleLineXYT,nophaseSingleLineFxFyT,nophaseSingleLineXYT);
+        end
     end
 
 end
@@ -56,10 +60,10 @@ end
 %% plotPhaseAlignment %%
 %%%%%%%%%%%%%%%%%%%%%%%%
 function plotPhaseAlignment(row,params,singleLineFxFyT,singleLineXYT,nophaseSingleLineFxFyT,nophaseSingleLineXYT)
-%this only works for 'x' phase encoding direction - could make it work
+%this only works for 'x' phase encoding direction - could make it workma
 %otherwise, but I am lazy. will add later.
 
-fig = mlrSmartfig('line image')
+figure
 
 %plot a snapshot of the frequency image
 subplot(2,4,1)
@@ -69,13 +73,13 @@ xlabel('Fx'),ylabel('Fy'),title('OG Frequency image (1 timepoint)')
 %plot the timecourse of the individual frequencies
 subplot(4,4,2), hold on,
 for x = 1:params.xdim
-    plot(1:params.numKsamples,reshape(real(singleLineFxFyT(row,x,:)),1,200))
+    plot(1:params.numKsamples,reshape(real(singleLineFxFyT(row,x,:)),1,params.numKsamples))
 end
 xlabel('time'),ylabel('magnitude of component'),title('Real Value Frequency component magnitudes over time (1 row)')
 
 subplot(4,4,6), hold on,
 for x = 1:params.xdim
-    plot(1:params.numKsamples,reshape(imag(singleLineFxFyT(row,x,:)),1,200))
+    plot(1:params.numKsamples,reshape(imag(singleLineFxFyT(row,x,:)),1,params.numKsamples))
 end
 xlabel('time'),ylabel('magnitude of component'),title('Imaginary Value Frequency component magnitudes over time (1 row)')
 
@@ -87,7 +91,7 @@ xlabel('x'),ylabel('y'),title('image created from single lines')
 %plot the timecourse of the image pixels
 subplot(2,4,4), hold on
 for x = 1:params.xdim
-plot(1:params.numKsamples,reshape(singleLineXYT(x,8,:),1,200))
+plot(1:params.numKsamples,reshape(singleLineXYT(x,8,:),1,params.numKsamples))
 end
 xlabel('time'),ylabel('magnitude'),title('pixel values over time (1 column)')
 
@@ -98,13 +102,13 @@ xlabel('Fx'),ylabel('Fy'),title('OG Frequency image (1 timepoint)')
 
 subplot(4,4,10), hold on,
 for x = 1:params.xdim
-plot(1:params.numKsamples,reshape(real(nophaseSingleLineFxFyT(row,x,:)),1,200))
+plot(1:params.numKsamples,reshape(real(nophaseSingleLineFxFyT(row,x,:)),1,params.numKsamples))
 end
 xlabel('time'),ylabel('magnitude of component'),title('Real Value Frequency component magnitudes over time (1 row)')
 
 subplot(4,4,14), hold on,
 for x = 1:params.xdim
-plot(1:params.numKsamples,reshape(imag(nophaseSingleLineFxFyT(row,x,:)),1,200))
+plot(1:params.numKsamples,reshape(imag(nophaseSingleLineFxFyT(row,x,:)),1,params.numKsamples))
 end
 xlabel('time'),ylabel('magnitude of component'),title('Imaginary Value Frequency component magnitudes over time (1 row)')
 
@@ -114,6 +118,6 @@ xlabel('x'),ylabel('y'),title('Realigned image')
 
 subplot(2,4,8), hold on
 for x = 1:params.xdim
-plot(1:params.numKsamples,reshape(nophaseSingleLineXYT(x,8,:),1,200))
+plot(1:params.numKsamples,reshape(nophaseSingleLineXYT(x,8,:),1,params.numKsamples))
 end
 xlabel('time'),ylabel('magnitude')

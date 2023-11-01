@@ -8,7 +8,7 @@ cd ~/data/EMRI/paperData/
 %% get the data you need
 
 % loop over scans. 1 = gated, 2 = ungated,, 3 = flipped.
-for scan = 1
+for scan = 1:3
     %loop over subjects
     for subject = 1:length(SIDs)
         % we dont have flipped data for subject s0615.
@@ -16,7 +16,7 @@ for scan = 1
             cd(SIDs(subject));
             %load the view, ROIs, Analyses, and go to ungated scan
             v = newView;
-            v = viewSet(v,'curGroup','Averages')
+            v = viewSet(v,'curGroup','averagesResized')
             v = viewSet(v,'curScan',scan)
             v = loadAnalysis(v,'emriAnal');
             v = loadROI(v,'spread') ;
@@ -28,10 +28,11 @@ for scan = 1
                 v = loadROI(v,'outsideBrainFlipped') ;
             end
             %get the frequencies and amplitudes from emriGradientAnal
-            [brainMean, spreadMean, outsideMean, brainStd, spreadStd, outsideStd, brainNum, spreadNum, outsideNum] = emriGradientAnal(v);  
+            [brainMean, spreadMean, outsideMean, brainStd, spreadStd, outsideStd, brainNum, spreadNum, outsideNum, brainAllAutocor, spreadAllAutocor, outsideAllAutocor] = emriGradientAnal(v);  
             %save the data into a larger data table
              data(subject,:) = [brainMean, spreadMean, outsideMean, brainStd, spreadStd, outsideStd, brainNum, spreadNum, outsideNum];
             %clear the view before going back and doing for each subject
+            figure
             pause(1)
             deleteView(v)
             mrQuit
@@ -40,6 +41,10 @@ for scan = 1
             %if we are on subject 1, scan 3
             data(subject,:) = NaN(1,9);
         end
+
+        brainAutocor{scan}{subject} = brainAllAutocor(:);
+        spreadAutocor{scan}{subject} = spreadAllAutocor(:);
+        outsideAutocor{scan}{subject} = outsideAllAutocor(:);
 
     end
    
@@ -68,11 +73,43 @@ for scan = 1
     scatter(40+median(1:height(data)), mean(data(:,3), 'omitnan'), 150, 'filled', 'k')
     errorbar(40+median(1:height(data)), mean(data(:,3), 'omitnan'), std(data(:,3), 'omitnan')/height(data),'k','MarkerEdgeColor','w'), 
     
+    allData{scan} = data;
 end
 
+keyboard
 %label each subplot with what kind of data it has
 subplot(1,3,1), title('Cardiac Gated')
 subplot(1,3,2), title('Ungated')
 subplot(1,3,3), title('flipped')
 keyboard
+
+%% give us pvalues for comparisons between areas, scans
+% in making comparisons between areas, we default to making them in the ungated condition.
+    
+    % compare the autocorrelation values within the brain to outside in the ungated condition
+    [hInsideOutside pOutsideInside] = ttest2(allData{2}(:,1), allData{2}(:,3),'tail','right')
+
+    % compare the autocorrelation values along the spread dimension to outside in the ungated condition
+    [hSpreadOutside pSpreadInside] = ttest2(allData{2}(:,2), allData{2}(:,3),'tail','right')
+
+    % compare the autocorrelation values within the brain to outside in the gated condition
+    [hInsideOutsideGated pOutsideInsideGated] = ttest2(allData{1}(:,1), allData{1}(:,3),'tail','right')
+
+    % compare the autocorrelation values along the spread dimension to outside in the gated condition
+    [hSpreadOutsideGated pSpreadInsideGated] = ttest2(allData{1}(:,2), allData{1}(:,3),'tail','right')
+
+    % compare the autocorrelation values within the brain to outside in the flipped condition
+    [hInsideOutsideFlipped pOutsideInsideFlipped] = ttest2(allData{3}(:,1), allData{3}(:,3),'tail','right')
+
+    % compare the autocorrelation values along the spread dimension to outside in the flipped condition
+    [hSpreadOutsideFlipped pSpreadInsideFlipped] = ttest2(allData{3}(:,2), allData{3}(:,3),'tail','right')
+
+    % compare the autocorrelation values within the brain in the gated vs ungated condition
+    [hInsideGatedUngated pInsideGatedUngated] = ttest2(allData{1}(:,1), allData{2}(:,1))
+
+    % compare the autocorrelation values along the spread in the gated vs ungated condition
+    [hSpreadGatedUngated pSpreadGatedUngated] = ttest2(allData{1}(:,2), allData{2}(:,2))
+
+    % compare the autocorrelation values outside of the brain in the gated vs ungated condition
+    [hOutsideGatedUngated pOutsideGatedUngated] = ttest2(allData{1}(:,3), allData{2}(:,3))
 
