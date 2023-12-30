@@ -3,6 +3,7 @@ function phaseUnlockedKsp = inImageReconPhaseUnlocked(params, inImage);
 
 %can sample 2 lines at once if you'd like to make kspace conjugate symmetric.
 %this ensures a REAL IMAGE. effectively the same as half-fourier sampling.
+%this is what I do in every simulation - but maybe you don't want to. 
 if params.buildConjugateLines
 
     for row = 1:(floor(params.xdim/2)+1)
@@ -43,3 +44,25 @@ else
     end
 
 end
+
+
+doEPI = 0;
+if doEPI
+    for row = 1:params.xdim
+        for sample = 1:floor(params.xdim/2)+1
+            imageKsp = fftshift(fft2(inImage{row}(:,:,1+sample*30)));
+            switch params.encodingDirection
+                case 'x'
+                    kspLine = imageKsp(sample,:);
+                    phaseUnlockedKsp(sample,:,row) = kspLine;
+
+                    kspLine2 = imageKsp(params.xdim-sample+1,:);
+                    phaseUnlockedKsp(params.xdim-sample+1,:,row) = kspLine2;
+            end
+        end
+    end
+end
+
+
+
+
