@@ -146,7 +146,21 @@ end
     
 
 
-
 for line = 1:length(inImage);
     inImage{line} = inImage{line}+inImageNoise{line};
 end
+
+addMotion = 0;
+if addMotion
+    parfor line = 1:length(inImage)
+        movement = .5*sin((1:params.ntimePointsMs)*2*pi/params.ntimePointsMs/3+rand*500);
+        for timePoint = 1:params.ntimePointsMs
+            tform = affine2d([1 0 0 ; 0 1 0 ; 0 movement(timePoint) 1]);
+            inImage{line}(:,:,timePoint) = imwarp(inImage{line}(:,:,timePoint), tform, 'OutputView', imref2d(size(inImage{line}(:,:,timePoint))));
+        end
+    end
+end
+
+
+
+
